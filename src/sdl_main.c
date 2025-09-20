@@ -85,8 +85,7 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        GameUpdateAndRender(&screen_buffer, new_game_started);
-        new_game_started = 0;
+        GameUpdateAndRender(&screen_buffer, &new_game_started);
 
         void *pixels;
         int pitch;

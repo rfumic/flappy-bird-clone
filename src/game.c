@@ -117,7 +117,6 @@ static inline PipePair *GetAvailablePipe(GameScreenBuffer *screen_buffer)
     if(pipe_queue.count > 0) {
         result = pipe_queue.pipes[0];
         result->x = screen_buffer->width;
-        /* TODO: handle random y here */
         result->bottom_pipe_y = GetRandomPipeY(screen_buffer->height);
 
         pipe_queue.pipes[0] = pipe_queue.pipes[1];
@@ -137,16 +136,68 @@ static PipePair pipes[3];
 
 #define PIPE_MOVEMENT_SPEED 10
 
+
+typedef struct {
+    i32 y;
+    i32 x;
+    i32 height;
+    i32 width;
+} Bird;
+
+#define BIRD_FALLING_RATE 5
+
+static Bird bird;
+
+static void DrawBird(GameScreenBuffer *game_screen_buffer) 
+{
+
+    u32 bird_color  = 0xFF9500FF; 
+
+    DrawRectangle(game_screen_buffer, bird.x, bird.y, 
+                  bird.x + bird.width, bird.y + bird.height,
+                  bird_color);
+}
+
+static inline b32 BirdCollidesWithCurrentPipe()
+{
+    b32 result = 0;
+    if(current_pipe) {
+        i32 bird_x_end = bird.x + bird.width;
+
+        b32 intersect_horizontally = 
+            (bird_x_end >= current_pipe->x && bird_x_end <= current_pipe->x + pipe_width) ||
+            (bird.x >= current_pipe->x && bird.x <= current_pipe->x + pipe_width);
+        
+        b32 intersect_vertically_bottom = 
+            bird.y + bird.height >= current_pipe->bottom_pipe_y;
+
+        b32 intersect_vertically_top = 
+            bird.y <= current_pipe->bottom_pipe_y - y_between_pipes;
+
+        b32 intersect_vertically = intersect_vertically_bottom || intersect_vertically_top;
+
+        result = intersect_horizontally && intersect_vertically;
+    }
+
+    return result;
+}
+
 static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer, 
-                                b32 new_game_started) 
+                                b32 *new_game_started) 
 {
 #if FLAPPY_DEBUG
     static u32 debug_frame_counter = 0;
 #endif
 
-    if(new_game_started) {
+    if(*new_game_started) {
         y_between_pipes = PercentOf(30, game_screen_buffer->height);
         pipe_width      = PercentOf(17, game_screen_buffer->width);
+
+        bird.width  = PercentOf(11, game_screen_buffer->width);
+        bird.height = PercentOf(7, game_screen_buffer->height);
+        bird.y      = game_screen_buffer->height / 2;
+        bird.x      = (PercentOf(28.67, game_screen_buffer->width) 
+                        - (bird.width / 2));
 
         pipes[0] = (PipePair){0, 550};
         pipes[1] = (PipePair){0, 550};
@@ -161,6 +212,7 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
         oldest_pipe  = NULL;
         current_pipe = NULL;
         newest_pipe  = GetAvailablePipe(game_screen_buffer);
+        *new_game_started = 0;
     }
     
     for(i32 i = 0; 
@@ -173,6 +225,12 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
         oldest_pipe = current_pipe;
         current_pipe = newest_pipe;
         newest_pipe = GetAvailablePipe(game_screen_buffer);
+    }
+
+    if(bird.y + bird.height >= game_screen_buffer->height ||
+       BirdCollidesWithCurrentPipe()) {
+        *new_game_started = 1;
+        return;
     }
 
     if(oldest_pipe) {
@@ -193,6 +251,9 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
         DrawPipePair(current_pipe, game_screen_buffer);
         current_pipe->x -= PIPE_MOVEMENT_SPEED;
     }
+
+    DrawBird(game_screen_buffer);
+    bird.y += BIRD_FALLING_RATE;
 
 #if FLAPPY_DEBUG
     (void)debug_frame_counter;

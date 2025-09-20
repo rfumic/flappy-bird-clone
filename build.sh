@@ -9,7 +9,7 @@ SDL3_LDFLAGS=$(pkg-config --libs sdl3)
 
 MACCOS_FLAGS="-framework CoreVideo -framework IOKit -framework Cocoa -framework CoreAudio"
 # TODO: Think about flags
-C_FLAGS="-std=c99 -Wall -Wextra -Wunused-function -fsanitize=address -g3"
+C_FLAGS="-std=c99 -Wall -Wextra -Wno-unused-function -fsanitize=address -g3"
 CUSTOM_FLAGS="-D FLAPPY_DEBUG"
 
 mkdir -p out
