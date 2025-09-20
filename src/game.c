@@ -46,14 +46,13 @@ typedef struct {
 
 static i32 pipe_width = 0;
 static u32 pipe_color = 0x00FF00FF;
+static i32 y_between_pipes = 0;
 
 static inline void DrawPipePair(PipePair *pipe_pair, GameScreenBuffer *buffer)
 {
     /* TODO: this currently doesnt take into account the "ground" */
     /*       everything is calculated relative to the  whole game screen */
 
-    i32 y_between_pipes = PercentOf(30, buffer->height);
-    
     // Draw top pipe
     DrawRectangle(buffer, 
                   pipe_pair->x, 0, 
@@ -70,6 +69,17 @@ static inline void DrawPipePair(PipePair *pipe_pair, GameScreenBuffer *buffer)
                   buffer->height, 
                   pipe_color);
 
+}
+
+static inline i32 GetRandomPipeY(i32 game_screen_height) {
+    i32 result;
+
+    i32 y_margin_top    = PercentOf(10, game_screen_height) + y_between_pipes;
+    i32 y_margin_bottom = PercentOf(90, game_screen_height);
+
+    result = PlatformGetRandomI32(y_margin_top, y_margin_bottom);
+    
+    return result;
 }
 
 typedef struct {
@@ -98,7 +108,7 @@ static inline void AddAvailablePipe(PipePair *new_pipe)
     }
 }
 
-static inline PipePair *GetAvailablePipe() 
+static inline PipePair *GetAvailablePipe(GameScreenBuffer *screen_buffer) 
 {
     Assert(pipe_queue.count >= 0);
 
@@ -106,9 +116,10 @@ static inline PipePair *GetAvailablePipe()
 
     if(pipe_queue.count > 0) {
         result = pipe_queue.pipes[0];
-        /* TODO: change this */
-        result->x = WINDOW_WIDTH;
+        result->x = screen_buffer->width;
         /* TODO: handle random y here */
+        result->bottom_pipe_y = GetRandomPipeY(screen_buffer->height);
+
         pipe_queue.pipes[0] = pipe_queue.pipes[1];
         pipe_queue.pipes[1] = pipe_queue.pipes[2];
         pipe_queue.pipes[2] = NULL;
@@ -123,7 +134,6 @@ static PipePair *current_pipe;
 static PipePair *newest_pipe;
 
 static PipePair pipes[3];
-static PipePair pipe_pair = { WINDOW_WIDTH / 2 , 550};
 
 #define PIPE_MOVEMENT_SPEED 10
 
@@ -135,7 +145,8 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
 #endif
 
     if(new_game_started) {
-        pipe_width    = PercentOf(17, game_screen_buffer->width);
+        y_between_pipes = PercentOf(30, game_screen_buffer->height);
+        pipe_width      = PercentOf(17, game_screen_buffer->width);
 
         pipes[0] = (PipePair){0, 550};
         pipes[1] = (PipePair){0, 550};
@@ -149,7 +160,7 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
 
         oldest_pipe  = NULL;
         current_pipe = NULL;
-        newest_pipe  = GetAvailablePipe();
+        newest_pipe  = GetAvailablePipe(game_screen_buffer);
     }
     
     for(i32 i = 0; 
@@ -161,7 +172,7 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
     if ((newest_pipe->x + pipe_width / 2) <= game_screen_buffer->width / 2) {
         oldest_pipe = current_pipe;
         current_pipe = newest_pipe;
-        newest_pipe = GetAvailablePipe();
+        newest_pipe = GetAvailablePipe(game_screen_buffer);
     }
 
     if(oldest_pipe) {

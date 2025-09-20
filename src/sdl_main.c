@@ -1,8 +1,20 @@
 #include <SDL3/SDL.h>
 #include <stdlib.h>
 
+
 #include "common.c"
+
+// Platform function signatures
+static inline i32 PlatformGetRandomI32(i32 min_value, i32 max_value);
+
 #include "game.c"
+
+/* TODO: custom random generator */
+static inline i32 PlatformGetRandomI32(i32 min_value, i32 max_value) {
+    i32 result = min_value + SDL_rand(max_value - min_value);
+
+    return result;
+}
 
 int main(int argc, char *argv[]) {
     (void)argc; (void)argv;
@@ -48,21 +60,27 @@ int main(int argc, char *argv[]) {
         .height = WINDOW_HEIGHT,
     };
 
-    b32 is_running = 1;
+    b32 game_running = 1;
     b32 new_game_started;
-    while(is_running) {
+    while(game_running) {
         SDL_Event event;
         while(SDL_PollEvent(&event)) {
             switch(event.type) {
                 case SDL_EVENT_QUIT: {
-                    is_running = 0;
+                    game_running = 0;
                     break;
                 }
                 case SDL_EVENT_KEY_DOWN: {
                     if(event.key.key == SDLK_ESCAPE) {
-                        is_running = 0;
+                        game_running = 0;
                         break;
                     }
+
+                    if(event.key.key == SDLK_R) {
+                        new_game_started = 1;
+                        break;
+                    }
+
                 }
             }
         }
