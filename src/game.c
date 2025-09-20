@@ -1,3 +1,6 @@
+// NOTE: toggles for gameplay debugging
+#define GAME_DEBUG_ALWAYS_SCORE 1
+
 typedef struct {
     void  *memory;
     i32    width;
@@ -45,13 +48,31 @@ typedef struct {
 } PipePair;
 
 static i32 pipe_width = 0;
-static u32 pipe_color = 0x00FF00FF;
 static i32 y_between_pipes = 0;
+
+static PipePair *oldest_pipe;
+static PipePair *current_pipe;
+static PipePair *newest_pipe;
 
 static inline void DrawPipePair(PipePair *pipe_pair, GameScreenBuffer *buffer)
 {
     /* TODO: this currently doesnt take into account the "ground" */
     /*       everything is calculated relative to the  whole game screen */
+
+    u32 pipe_color = 0x00FF00FF;
+#if FLAPPY_DEBUG
+    if(pipe_pair == oldest_pipe) {
+        pipe_color = 0xFF0000FF;
+    }
+
+    if(pipe_pair == current_pipe) {
+        pipe_color = 0x00FF00FF;
+    }
+
+    if(pipe_pair == newest_pipe) {
+        pipe_color = 0x0000FFFF;
+    }
+#endif
 
     // Draw top pipe
     DrawRectangle(buffer, 
@@ -59,7 +80,7 @@ static inline void DrawPipePair(PipePair *pipe_pair, GameScreenBuffer *buffer)
                   pipe_pair->x + pipe_width, 
                   (pipe_pair->bottom_pipe_y - y_between_pipes), 
                   /* pipe_color); */
-                  0xFF0000FF);
+                  0xFF00FFFF);
 
     // Draw bottom pipe
     DrawRectangle(buffer, 
@@ -117,7 +138,11 @@ static inline PipePair *GetAvailablePipe(GameScreenBuffer *screen_buffer)
     if(pipe_queue.count > 0) {
         result = pipe_queue.pipes[0];
         result->x = screen_buffer->width;
+#if GAME_DEBUG_ALWAYS_SCORE
+        result->bottom_pipe_y = 700;
+#else
         result->bottom_pipe_y = GetRandomPipeY(screen_buffer->height);
+#endif
 
         pipe_queue.pipes[0] = pipe_queue.pipes[1];
         pipe_queue.pipes[1] = pipe_queue.pipes[2];
@@ -128,9 +153,6 @@ static inline PipePair *GetAvailablePipe(GameScreenBuffer *screen_buffer)
     return result;
 }
 
-static PipePair *oldest_pipe;
-static PipePair *current_pipe;
-static PipePair *newest_pipe;
 
 static PipePair pipes[3];
 
@@ -160,7 +182,7 @@ static void DrawBird(GameScreenBuffer *game_screen_buffer)
 
 static inline b32 BirdCollidesWithCurrentPipe()
 {
-    b32 result = 0;
+    b32 result = false;
     if(current_pipe) {
         i32 bird_x_end = bird.x + bird.width;
 
@@ -182,6 +204,9 @@ static inline b32 BirdCollidesWithCurrentPipe()
     return result;
 }
 
+static i32 current_score = 0;
+static b32 can_score = true;
+
 static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer, 
                                 b32 *new_game_started) 
 {
@@ -199,6 +224,9 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
         bird.x      = (PercentOf(28.67, game_screen_buffer->width) 
                         - (bird.width / 2));
 
+        current_score = 0;
+        can_score = true;
+
         pipes[0] = (PipePair){0, 550};
         pipes[1] = (PipePair){0, 550};
         pipes[2] = (PipePair){0, 550};
@@ -212,7 +240,7 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
         oldest_pipe  = NULL;
         current_pipe = NULL;
         newest_pipe  = GetAvailablePipe(game_screen_buffer);
-        *new_game_started = 0;
+        *new_game_started = false;
     }
     
     for(i32 i = 0; 
@@ -223,13 +251,16 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
 
     if ((newest_pipe->x + pipe_width / 2) <= game_screen_buffer->width / 2) {
         oldest_pipe = current_pipe;
+
         current_pipe = newest_pipe;
+        can_score = 1;
+
         newest_pipe = GetAvailablePipe(game_screen_buffer);
     }
 
     if(bird.y + bird.height >= game_screen_buffer->height ||
        BirdCollidesWithCurrentPipe()) {
-        *new_game_started = 1;
+        *new_game_started = true;
         return;
     }
 
@@ -248,12 +279,20 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
     }
 
     if(current_pipe) {
+        if(bird.x > current_pipe->x && can_score) {
+            current_score++;
+            can_score = 0;
+            PlatformDebugPrint("score: %d", current_score);
+        }
+
         DrawPipePair(current_pipe, game_screen_buffer);
         current_pipe->x -= PIPE_MOVEMENT_SPEED;
     }
 
     DrawBird(game_screen_buffer);
+#if !GAME_DEBUG_ALWAYS_SCORE
     bird.y += BIRD_FALLING_RATE;
+#endif
 
 #if FLAPPY_DEBUG
     (void)debug_frame_counter;
