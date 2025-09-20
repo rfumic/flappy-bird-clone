@@ -10,6 +10,7 @@ SDL3_LDFLAGS=$(pkg-config --libs sdl3)
 MACCOS_FLAGS="-framework CoreVideo -framework IOKit -framework Cocoa -framework CoreAudio"
 # TODO: Think about flags
 C_FLAGS="-std=c99 -Wall -Wextra -Wunused-function -g"
+CUSTOM_FLAGS="-D FLAPPY_DEBUG"
 
 mkdir -p out
 
@@ -17,6 +18,7 @@ set -x
 clang src/sdl_main.c \
           $MACOS_FLAGS \
           $SDL3_CFLAGS $SDL3_LDFLAGS \
+          $CUSTOM_FLAGS \
           $C_FLAGS \
           -o out/$APP_NAME
 set +x

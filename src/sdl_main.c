@@ -24,7 +24,6 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    /* TODO: maybe make this debug only? */
     SDL_RaiseWindow(window);
 
     SDL_Renderer *renderer = SDL_CreateRenderer(window, NULL);

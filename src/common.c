@@ -16,9 +16,15 @@ typedef size_t usize;
 
 #define PercentOf(percentage, total) ((percentage/100.0f) * total)
 
+#ifdef FLAPPY_DEBUG
+
 #define Assert(c)           \
     while (!(c))            \
     __builtin_unreachable() \
+
+#else
+#define Assert(c) 
+#endif
 
 #define ArrayCount(a) (size)(sizeof(a) / sizeof(*(a)))
 

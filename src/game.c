@@ -130,7 +130,9 @@ static PipePair pipe_pair = { WINDOW_WIDTH / 2 , 550};
 static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer, 
                                 b32 new_game_started) 
 {
+#if FLAPPY_DEBUG
     static u32 debug_frame_counter = 0;
+#endif
 
     if(new_game_started) {
         pipe_width    = PercentOf(17, game_screen_buffer->width);
@@ -181,6 +183,8 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
         current_pipe->x -= PIPE_MOVEMENT_SPEED;
     }
 
+#if FLAPPY_DEBUG
     (void)debug_frame_counter;
     debug_frame_counter++;
+#endif
 }
