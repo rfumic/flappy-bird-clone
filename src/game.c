@@ -1,4 +1,4 @@
-typedef struct {
+            typedef struct {
     void  *memory;
     i32    width;
     i32    height;
@@ -39,6 +39,43 @@ static void DrawRectangle(GameScreenBuffer *buffer, i32 min_x, i32 min_y,
     }
 }
 
+typedef struct {
+    i32 x;
+    i32 bottom_pipe_y;
+} PipePair;
+
+static void DrawPipePair(PipePair *pipe_pair, GameScreenBuffer *buffer)
+{
+    /* TODO: this currently doesnt take into account the "ground" */
+    /*       everything is calculated relative to the  whole game screen */
+
+    /* TODO: global variables? */
+    u32 pipe_color = 0x00FF00FF;
+    i32 pipe_width = PercentOf(17, buffer->width);
+
+    i32 y_between_pipes = PercentOf(30, buffer->height);
+    
+    // Draw top pipe
+    DrawRectangle(buffer, 
+                  pipe_pair->x, 0, 
+                  pipe_pair->x + pipe_width, 
+                  (pipe_pair->bottom_pipe_y - y_between_pipes), 
+                  /* pipe_color); */
+                  0xFF0000FF);
+
+    // Draw bottom pipe
+    DrawRectangle(buffer, 
+                  pipe_pair->x, 
+                  pipe_pair->bottom_pipe_y, 
+                  pipe_pair->x + pipe_width, 
+                  buffer->height, 
+                  pipe_color);
+
+}
+
+/* static Pipe[3] pipes; */
+static PipePair pipe_pair = { WINDOW_WIDTH / 2 , 550};
+
 static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer) 
 {
     for(i32 i = 0; 
@@ -47,5 +84,6 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer)
         ((u32 *)game_screen_buffer->memory)[i] = 0xFFFF00FF;
     }
 
-    DrawRectangle(game_screen_buffer, 50, 50, 150, 200, 0x00FF00FF);
+    DrawPipePair(&pipe_pair, game_screen_buffer);
+
 }
