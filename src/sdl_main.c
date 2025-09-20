@@ -29,13 +29,15 @@ int main(int argc, char *argv[]) {
 
     SDL_Renderer *renderer = SDL_CreateRenderer(window, NULL);
 
-    SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, 
+    SDL_Texture *texture = SDL_CreateTexture(renderer, 
+                                             SDL_PIXELFORMAT_RGBA8888, 
                                              SDL_TEXTUREACCESS_STREAMING, 
                                              WINDOW_WIDTH, WINDOW_HEIGHT);
 
     u32 *main_buffer = malloc(WINDOW_HEIGHT * WINDOW_WIDTH * sizeof(u32));
     if(main_buffer == NULL) {
-        SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to allocate main buffer\n");
+        SDL_LogError(SDL_LOG_CATEGORY_ERROR, 
+                     "Failed to allocate main buffer\n");
         SDL_DestroyWindow(window);
         SDL_Quit();
         return 1;

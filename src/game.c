@@ -45,14 +45,12 @@ typedef struct {
 } PipePair;
 
 static i32 pipe_width = 0;
-static i32 pipe_distance = 0;
 static u32 pipe_color = 0x00FF00FF;
 
-static void DrawPipePair(PipePair *pipe_pair, GameScreenBuffer *buffer)
+static inline void DrawPipePair(PipePair *pipe_pair, GameScreenBuffer *buffer)
 {
     /* TODO: this currently doesnt take into account the "ground" */
     /*       everything is calculated relative to the  whole game screen */
-
 
     i32 y_between_pipes = PercentOf(30, buffer->height);
     
@@ -74,25 +72,82 @@ static void DrawPipePair(PipePair *pipe_pair, GameScreenBuffer *buffer)
 
 }
 
+typedef struct {
+    PipePair *pipes[3];
+    i32 count;
+} PipeQueue;
+
+static PipeQueue pipe_queue;
+
+static inline void AddAvailablePipe(PipePair *new_pipe)
+{
+    if(new_pipe == NULL) {
+        return;
+    }
+    Assert(pipe_queue.count >= 0 && pipe_queue.count < 3);
+
+    i32 count = pipe_queue.count == 0 ? 1 : pipe_queue.count;
+
+    for(i32 i = 0; i < count; i++) {
+        PipePair *curr = pipe_queue.pipes[i];
+        if(curr == NULL) {
+            pipe_queue.pipes[i] = new_pipe;
+            pipe_queue.count++;
+            return;
+        }
+    }
+}
+
+static inline PipePair *GetAvailablePipe() 
+{
+    Assert(pipe_queue.count >= 0);
+
+    PipePair *result = NULL;
+
+    if(pipe_queue.count > 0) {
+        result = pipe_queue.pipes[0];
+        /* TODO: change this */
+        result->x = WINDOW_WIDTH;
+        /* TODO: handle random y here */
+        pipe_queue.pipes[0] = pipe_queue.pipes[1];
+        pipe_queue.pipes[1] = pipe_queue.pipes[2];
+        pipe_queue.pipes[2] = NULL;
+        pipe_queue.count--;
+    }
+
+    return result;
+}
+
+static PipePair *oldest_pipe;
+static PipePair *current_pipe;
+static PipePair *newest_pipe;
+
 static PipePair pipes[3];
 static PipePair pipe_pair = { WINDOW_WIDTH / 2 , 550};
 
-static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer, b32 new_game_started) 
+#define PIPE_MOVEMENT_SPEED 10
+
+static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer, 
+                                b32 new_game_started) 
 {
+    static u32 debug_frame_counter = 0;
+
     if(new_game_started) {
         pipe_width    = PercentOf(17, game_screen_buffer->width);
-        /* pipe_distance = PercentOf(38.42, game_screen_buffer->width); */
-        pipe_distance = pipe_width * 2.3214285714;
 
-        pipes[0].x = (WINDOW_WIDTH / 2);
-        pipes[0].bottom_pipe_y = 550;
+        pipes[0] = (PipePair){0, 550};
+        pipes[1] = (PipePair){0, 550};
+        pipes[2] = (PipePair){0, 550};
 
-        pipes[1].x = pipes[0].x + pipe_distance;
-        pipes[1].bottom_pipe_y = 550;
+        pipe_queue.pipes[0] = &pipes[0];
+        pipe_queue.pipes[1] = &pipes[1];
+        pipe_queue.pipes[2] = &pipes[2];
+        pipe_queue.count = 3;
 
-        pipes[2].x = pipes[1].x + pipe_distance;
-        pipes[2].bottom_pipe_y = 550;
 
+        oldest_pipe  = NULL;
+        current_pipe = NULL;
+        newest_pipe  = GetAvailablePipe();
     }
     
     for(i32 i = 0; 
@@ -101,16 +156,31 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer, b32 new_ga
         ((u32 *)game_screen_buffer->memory)[i] = 0xFFFF00FF;
     }
 
-    for(i32 i = 0; i < ArrayCount(pipes); i++) {
-        PipePair *pipe_pair = &pipes[i];
-        pipe_pair->x -= 5;
-        if(pipe_pair->x + pipe_width <= 0) {
-            pipe_pair->x = game_screen_buffer->width;
-        }
-
-        DrawPipePair(pipe_pair, game_screen_buffer);
+    if ((newest_pipe->x + pipe_width / 2) <= game_screen_buffer->width / 2) {
+        oldest_pipe = current_pipe;
+        current_pipe = newest_pipe;
+        newest_pipe = GetAvailablePipe();
     }
 
+    if(oldest_pipe) {
+        if (oldest_pipe->x + pipe_width <= 0) {
+            AddAvailablePipe(oldest_pipe);
+        }
 
+        DrawPipePair(oldest_pipe, game_screen_buffer);
+        oldest_pipe->x -= PIPE_MOVEMENT_SPEED;
+    }
 
+    if(newest_pipe) {
+        DrawPipePair(newest_pipe, game_screen_buffer);
+        newest_pipe->x -= PIPE_MOVEMENT_SPEED;
+    }
+
+    if(current_pipe) {
+        DrawPipePair(current_pipe, game_screen_buffer);
+        current_pipe->x -= PIPE_MOVEMENT_SPEED;
+    }
+
+    (void)debug_frame_counter;
+    debug_frame_counter++;
 }
