@@ -48,6 +48,7 @@ int main(int argc, char *argv[]) {
     };
 
     b32 is_running = 1;
+    b32 new_game_started;
     while(is_running) {
         SDL_Event event;
         while(SDL_PollEvent(&event)) {
@@ -65,7 +66,8 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        GameUpdateAndRender(&screen_buffer);
+        GameUpdateAndRender(&screen_buffer, new_game_started);
+        new_game_started = 0;
 
         void *pixels;
         int pitch;

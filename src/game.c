@@ -1,4 +1,4 @@
-            typedef struct {
+typedef struct {
     void  *memory;
     i32    width;
     i32    height;
@@ -44,14 +44,15 @@ typedef struct {
     i32 bottom_pipe_y;
 } PipePair;
 
+static i32 pipe_width = 0;
+static i32 pipe_distance = 0;
+static u32 pipe_color = 0x00FF00FF;
+
 static void DrawPipePair(PipePair *pipe_pair, GameScreenBuffer *buffer)
 {
     /* TODO: this currently doesnt take into account the "ground" */
     /*       everything is calculated relative to the  whole game screen */
 
-    /* TODO: global variables? */
-    u32 pipe_color = 0x00FF00FF;
-    i32 pipe_width = PercentOf(17, buffer->width);
 
     i32 y_between_pipes = PercentOf(30, buffer->height);
     
@@ -73,17 +74,43 @@ static void DrawPipePair(PipePair *pipe_pair, GameScreenBuffer *buffer)
 
 }
 
-/* static Pipe[3] pipes; */
+static PipePair pipes[3];
 static PipePair pipe_pair = { WINDOW_WIDTH / 2 , 550};
 
-static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer) 
+static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer, b32 new_game_started) 
 {
+    if(new_game_started) {
+        pipe_width    = PercentOf(17, game_screen_buffer->width);
+        /* pipe_distance = PercentOf(38.42, game_screen_buffer->width); */
+        pipe_distance = pipe_width * 2.3214285714;
+
+        pipes[0].x = (WINDOW_WIDTH / 2);
+        pipes[0].bottom_pipe_y = 550;
+
+        pipes[1].x = pipes[0].x + pipe_distance;
+        pipes[1].bottom_pipe_y = 550;
+
+        pipes[2].x = pipes[1].x + pipe_distance;
+        pipes[2].bottom_pipe_y = 550;
+
+    }
+    
     for(i32 i = 0; 
         i < game_screen_buffer->width * game_screen_buffer->height; 
         i++) {
         ((u32 *)game_screen_buffer->memory)[i] = 0xFFFF00FF;
     }
 
-    DrawPipePair(&pipe_pair, game_screen_buffer);
+    for(i32 i = 0; i < ArrayCount(pipes); i++) {
+        PipePair *pipe_pair = &pipes[i];
+        pipe_pair->x -= 5;
+        if(pipe_pair->x + pipe_width <= 0) {
+            pipe_pair->x = game_screen_buffer->width;
+        }
+
+        DrawPipePair(pipe_pair, game_screen_buffer);
+    }
+
+
 
 }

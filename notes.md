@@ -12,6 +12,13 @@ the bird is ~7% of "air" tall, 11% of screen wide
 bird is centered at around 28.67% of scree width
 
 
+//
+pipe-wid = 2.8
+dist-bet = 6.5
+
+dist/pipe-w = 2.3214285714
+//
+
 
 # GAMEPLAY ASSETS
 
