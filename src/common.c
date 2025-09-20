@@ -14,6 +14,8 @@ typedef char byte;
 typedef ptrdiff_t size;
 typedef size_t usize;
 
+#define global static
+
 #define PercentOf(percentage, total) ((percentage/100.0f) * total)
 
 #ifdef FLAPPY_DEBUG

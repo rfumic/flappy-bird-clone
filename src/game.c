@@ -1,11 +1,16 @@
 // NOTE: toggles for gameplay debugging
-#define GAME_DEBUG_ALWAYS_SCORE 1
+#define GAME_DEBUG_ALWAYS_SCORE 0
 
 typedef struct {
     void  *memory;
     i32    width;
     i32    height;
 } GameScreenBuffer;
+
+typedef struct {
+    b32 jump_key_pressed;
+    b32 new_game_started;
+} GameState;
 
 static void DrawRectangle(GameScreenBuffer *buffer, i32 min_x, i32 min_y, 
                           i32 max_x, i32 max_y, u32 color) 
@@ -47,12 +52,12 @@ typedef struct {
     i32 bottom_pipe_y;
 } PipePair;
 
-static i32 pipe_width = 0;
-static i32 y_between_pipes = 0;
+global i32 pipe_width = 0;
+global i32 y_between_pipes = 0;
 
-static PipePair *oldest_pipe;
-static PipePair *current_pipe;
-static PipePair *newest_pipe;
+global PipePair *oldest_pipe;
+global PipePair *current_pipe;
+global PipePair *newest_pipe;
 
 static inline void DrawPipePair(PipePair *pipe_pair, GameScreenBuffer *buffer)
 {
@@ -108,7 +113,7 @@ typedef struct {
     i32 count;
 } PipeQueue;
 
-static PipeQueue pipe_queue;
+global PipeQueue pipe_queue;
 
 static inline void AddAvailablePipe(PipePair *new_pipe)
 {
@@ -154,9 +159,9 @@ static inline PipePair *GetAvailablePipe(GameScreenBuffer *screen_buffer)
 }
 
 
-static PipePair pipes[3];
+global PipePair pipes[3];
 
-#define PIPE_MOVEMENT_SPEED 10
+#define PIPE_MOVEMENT_SPEED 15
 
 
 typedef struct {
@@ -164,11 +169,12 @@ typedef struct {
     i32 x;
     i32 height;
     i32 width;
+    f32 velocity;
 } Bird;
 
-#define BIRD_FALLING_RATE 5
+#define BIRD_FALLING_RATE 10
 
-static Bird bird;
+global Bird bird;
 
 static void DrawBird(GameScreenBuffer *game_screen_buffer) 
 {
@@ -204,17 +210,17 @@ static inline b32 BirdCollidesWithCurrentPipe()
     return result;
 }
 
-static i32 current_score = 0;
-static b32 can_score = true;
+global i32 current_score = 0;
+global b32 can_score = true;
 
 static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer, 
-                                b32 *new_game_started) 
+                                GameState *game_state) 
 {
 #if FLAPPY_DEBUG
     static u32 debug_frame_counter = 0;
 #endif
 
-    if(*new_game_started) {
+    if(game_state->new_game_started) {
         y_between_pipes = PercentOf(30, game_screen_buffer->height);
         pipe_width      = PercentOf(17, game_screen_buffer->width);
 
@@ -223,6 +229,7 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
         bird.y      = game_screen_buffer->height / 2;
         bird.x      = (PercentOf(28.67, game_screen_buffer->width) 
                         - (bird.width / 2));
+        bird.velocity = 0;
 
         current_score = 0;
         can_score = true;
@@ -240,7 +247,9 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
         oldest_pipe  = NULL;
         current_pipe = NULL;
         newest_pipe  = GetAvailablePipe(game_screen_buffer);
-        *new_game_started = false;
+
+        /* game_state->new_game_started = false; */
+        *game_state = (GameState){0};
     }
     
     for(i32 i = 0; 
@@ -260,7 +269,7 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
 
     if(bird.y + bird.height >= game_screen_buffer->height ||
        BirdCollidesWithCurrentPipe()) {
-        *new_game_started = true;
+        game_state->new_game_started = true;
         return;
     }
 
@@ -290,9 +299,27 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
     }
 
     DrawBird(game_screen_buffer);
-#if !GAME_DEBUG_ALWAYS_SCORE
-    bird.y += BIRD_FALLING_RATE;
-#endif
+
+    /* TODO: Figure out how to get these speeds just right */
+
+    if(game_state->jump_key_pressed) {
+        bird.velocity = -(game_screen_buffer->height * 0.02f);
+        game_state->jump_key_pressed = false;
+    }
+
+    // NOTE: this is gravity
+    bird.velocity += game_screen_buffer->height * 0.002f;
+    bird.y += bird.velocity;
+    
+    f32 max_fall = game_screen_buffer->height * 0.03f;
+    if(bird.velocity > max_fall) {
+        bird.velocity = max_fall;
+    }
+   
+
+/* #if !GAME_DEBUG_ALWAYS_SCORE */
+/*     bird.y += BIRD_FALLING_RATE; */
+/* #endif */
 
 #if FLAPPY_DEBUG
     (void)debug_frame_counter;

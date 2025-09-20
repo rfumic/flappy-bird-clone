@@ -9,7 +9,14 @@ static inline i32 PlatformGetRandomI32(i32 min_value, i32 max_value);
 
 #define PlatformDebugPrint(format_str, ...) SDL_Log(format_str, ##__VA_ARGS__)
 
+static inline f32 PlatformSineF32(f32 x);
+
 #include "game.c"
+
+static inline f32 PlatformSineF32(f32 x)
+{
+    return SDL_sinf(x);
+}
 
 /* TODO: custom random generator */
 static inline i32 PlatformGetRandomI32(i32 min_value, i32 max_value) {
@@ -62,8 +69,11 @@ int main(int argc, char *argv[]) {
         .height = WINDOW_HEIGHT,
     };
 
+    GameState game_state = {
+        .new_game_started = true,
+    };
+
     b32 game_running = true;
-    b32 new_game_started;
     while(game_running) {
         SDL_Event event;
         while(SDL_PollEvent(&event)) {
@@ -72,14 +82,21 @@ int main(int argc, char *argv[]) {
                     game_running = false;
                     break;
                 }
+                case SDL_EVENT_KEY_UP: {
+                    if(event.key.key == SDLK_UP) {
+                        game_state.jump_key_pressed = true;
+                        break;
+                    }
+                }
                 case SDL_EVENT_KEY_DOWN: {
+
                     if(event.key.key == SDLK_ESCAPE) {
                         game_running = false;
                         break;
                     }
 
                     if(event.key.key == SDLK_R) {
-                        new_game_started = true;
+                        game_state.new_game_started = true;
                         break;
                     }
 
@@ -87,7 +104,7 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        GameUpdateAndRender(&screen_buffer, &new_game_started);
+        GameUpdateAndRender(&screen_buffer, &game_state);
 
         void *pixels;
         int pitch;
