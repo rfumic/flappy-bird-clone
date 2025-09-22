@@ -10,6 +10,7 @@ typedef struct {
 typedef struct {
     b32 jump_key_pressed;
     b32 new_game_started;
+    u64 delta_time_ms;
 } GameState;
 
 static void DrawRectangle(GameScreenBuffer *buffer, i32 min_x, i32 min_y, 
@@ -161,7 +162,7 @@ static inline PipePair *GetAvailablePipe(GameScreenBuffer *screen_buffer)
 
 global PipePair pipes[3];
 
-#define PIPE_MOVEMENT_SPEED 15
+#define PIPE_MOVEMENT_SPEED 0.25
 
 
 typedef struct {
@@ -249,7 +250,10 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
         newest_pipe  = GetAvailablePipe(game_screen_buffer);
 
         /* game_state->new_game_started = false; */
-        *game_state = (GameState){0};
+        *game_state = (GameState) {
+            .jump_key_pressed = 0, 
+            .new_game_started = 0
+        };
     }
     
     for(i32 i = 0; 
@@ -279,12 +283,12 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
         }
 
         DrawPipePair(oldest_pipe, game_screen_buffer);
-        oldest_pipe->x -= PIPE_MOVEMENT_SPEED;
+        oldest_pipe->x -= PIPE_MOVEMENT_SPEED * game_state->delta_time_ms;
     }
 
     if(newest_pipe) {
         DrawPipePair(newest_pipe, game_screen_buffer);
-        newest_pipe->x -= PIPE_MOVEMENT_SPEED;
+        newest_pipe->x -= PIPE_MOVEMENT_SPEED * game_state->delta_time_ms;
     }
 
     if(current_pipe) {
@@ -295,7 +299,7 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
         }
 
         DrawPipePair(current_pipe, game_screen_buffer);
-        current_pipe->x -= PIPE_MOVEMENT_SPEED;
+        current_pipe->x -= PIPE_MOVEMENT_SPEED * game_state->delta_time_ms;
     }
 
     DrawBird(game_screen_buffer);
@@ -303,15 +307,20 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
     /* TODO: Figure out how to get these speeds just right */
 
     if(game_state->jump_key_pressed) {
-        bird.velocity = -(game_screen_buffer->height * 0.02f);
+        bird.velocity = -(game_screen_buffer->height * 0.6f);
         game_state->jump_key_pressed = false;
     }
 
+    f32 delta_time = game_state->delta_time_ms / 1000.0f;
+
     // NOTE: this is gravity
-    bird.velocity += game_screen_buffer->height * 0.002f;
-    bird.y += bird.velocity;
+    bird.velocity += (game_screen_buffer->height * 0.002f * 30.0f * 30.0f) * delta_time;
+    bird.y += bird.velocity * delta_time;
+#if GAME_DEBUG_ALWAYS_SCORE
+    bird.y = game_screen_buffer->height / 2;
+#endif
     
-    f32 max_fall = game_screen_buffer->height * 0.03f;
+    f32 max_fall = game_screen_buffer->height * 0.03f * 30.0f;
     if(bird.velocity > max_fall) {
         bird.velocity = max_fall;
     }

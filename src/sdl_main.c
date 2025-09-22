@@ -71,10 +71,19 @@ int main(int argc, char *argv[]) {
 
     GameState game_state = {
         .new_game_started = true,
+        .delta_time_ms = 0,
     };
+
+    u64 current_tick = SDL_GetTicks();
+    u64 last_tick;
 
     b32 game_running = true;
     while(game_running) {
+        last_tick = current_tick;
+        current_tick = SDL_GetTicks();
+
+        game_state.delta_time_ms = current_tick - last_tick;
+
         SDL_Event event;
         while(SDL_PollEvent(&event)) {
             switch(event.type) {
@@ -117,7 +126,8 @@ int main(int argc, char *argv[]) {
         SDL_RenderPresent(renderer);
 
         /* TODO: figure out how to establish a frame rate correctly */
-        SDL_Delay(32);
+        SDL_Delay(16);
+        /* SDL_Delay(32); */
     }
 
     SDL_DestroyWindow(window);
