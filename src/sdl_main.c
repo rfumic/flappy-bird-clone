@@ -71,7 +71,8 @@ int main(int argc, char *argv[]) {
     GameScreenBuffer screen_buffer = {
         .memory = (void *) main_buffer,
         .width = WINDOW_WIDTH,
-        .height = WINDOW_HEIGHT,
+        .actual_height = WINDOW_HEIGHT,
+        .playable_height = PercentOf(91, WINDOW_HEIGHT)
     };
 
     GameState game_state = {

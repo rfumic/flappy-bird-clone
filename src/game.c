@@ -8,7 +8,8 @@ global GameDebugFlags game_debug_flags = 0;
 typedef struct {
     void  *memory;
     i32    width;
-    i32    height;
+    i32    actual_height;
+    i32    playable_height;
 } GameScreenBuffer;
 
 typedef struct {
@@ -23,7 +24,7 @@ static void DrawRectangle(GameScreenBuffer *buffer, i32 min_x, i32 min_y,
     min_x = Max(0, min_x);
     min_y = Max(0, min_y);
     max_x = Min(max_x, buffer->width);
-    max_y = Min(max_y, buffer->height);
+    max_y = Min(max_y, buffer->actual_height);
 
     /* TODO: consider adding these to GameScreenBuffer if used frequently */
     u32 bytes_per_pixel = sizeof(u32);
@@ -85,7 +86,7 @@ static inline void DrawPipePair(PipePair *pipe_pair, GameScreenBuffer *buffer)
                   pipe_pair->x, 
                   pipe_pair->bottom_pipe_y, 
                   pipe_pair->x + pipe_width, 
-                  buffer->height, 
+                  buffer->playable_height, 
                   pipe_color);
 
 }
@@ -136,7 +137,7 @@ static inline PipePair *GetAvailablePipe(GameScreenBuffer *screen_buffer)
     if(pipe_queue.count > 0) {
         result = pipe_queue.pipes[0];
         result->x = screen_buffer->width;
-        result->bottom_pipe_y = GetRandomPipeY(screen_buffer->height);
+        result->bottom_pipe_y = GetRandomPipeY(screen_buffer->playable_height);
 
 #if FLAPPY_DEBUG
         if(game_debug_flags & GDF_ALWAYS_SCORE) {
@@ -216,12 +217,12 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
 #endif
 
     if(game_state->new_game_started) {
-        y_between_pipes = PercentOf(30, game_screen_buffer->height);
+        y_between_pipes = PercentOf(30, game_screen_buffer->playable_height);
         pipe_width      = PercentOf(17, game_screen_buffer->width);
 
         bird.width  = PercentOf(11, game_screen_buffer->width);
-        bird.height = PercentOf(7, game_screen_buffer->height);
-        bird.y      = game_screen_buffer->height / 2;
+        bird.height = PercentOf(7, game_screen_buffer->playable_height);
+        bird.y      = game_screen_buffer->playable_height / 2;
         bird.x      = (PercentOf(28.67, game_screen_buffer->width) 
                         - (bird.width / 2));
         bird.velocity = 0;
@@ -250,7 +251,7 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
     }
     
     for(i32 i = 0; 
-        i < game_screen_buffer->width * game_screen_buffer->height; 
+        i < game_screen_buffer->width * game_screen_buffer->actual_height; 
         i++) {
         ((u32 *)game_screen_buffer->memory)[i] = 0xFFFF00FF;
     }
@@ -264,7 +265,7 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
         newest_pipe = GetAvailablePipe(game_screen_buffer);
     }
 
-    if(bird.y + bird.height >= game_screen_buffer->height ||
+    if(bird.y + bird.height >= game_screen_buffer->playable_height ||
        BirdCollidesWithCurrentPipe()) {
         game_state->new_game_started = true;
         return;
@@ -295,28 +296,40 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
         current_pipe->x -= PIPE_MOVEMENT_SPEED * game_state->delta_time_ms;
     }
 
+    // NOTE: DrawGround
+    {
+        u32 color = 0xCC00FFFF;
+        i32 start_y = game_screen_buffer->playable_height;
+        i32 end_y = game_screen_buffer->actual_height;
+
+        DrawRectangle(game_screen_buffer,
+                      0, start_y,
+                      game_screen_buffer->width, end_y,
+                      color);
+    }
+
     DrawBird(game_screen_buffer);
 
     /* TODO: Figure out how to get these speeds just right */
 
     if(game_state->jump_key_pressed) {
-        bird.velocity = -(game_screen_buffer->height * 0.6f);
+        bird.velocity = -(game_screen_buffer->playable_height * 0.6f);
         game_state->jump_key_pressed = false;
     }
 
     f32 delta_time = game_state->delta_time_ms / 1000.0f;
 
     // NOTE: this is gravity
-    bird.velocity += (game_screen_buffer->height * 0.002f * 30.0f * 30.0f) * delta_time;
+    bird.velocity += (game_screen_buffer->playable_height * 0.002f * 30.0f * 30.0f) * delta_time;
     bird.y += bird.velocity * delta_time;
 
 #if FLAPPY_DEBUG
     if(game_debug_flags & GDF_ALWAYS_SCORE) {
-        bird.y = game_screen_buffer->height / 2;
+        bird.y = game_screen_buffer->playable_height / 2;
     }
 #endif
     
-    f32 max_fall = game_screen_buffer->height * 0.03f * 30.0f;
+    f32 max_fall = game_screen_buffer->playable_height * 0.03f * 30.0f;
     if(bird.velocity > max_fall) {
         bird.velocity = max_fall;
     }

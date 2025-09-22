@@ -11,6 +11,8 @@ two pipes max are fully visible
 the bird is ~7% of "air" tall, 11% of screen wide 
 bird is centered at around 28.67% of scree width
 
+ground is ~9% of screen height
+
 
 //
 pipe-wid = 2.8
