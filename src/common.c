@@ -30,6 +30,10 @@ typedef size_t usize;
 
 #define ArrayCount(a) (size)(sizeof(a) / sizeof(*(a)))
 
+#define Min(a,b) (((a)<(b))?(a):(b))
+
+#define Max(a,b) (((a)>(b))?(a):(b))
+
 /* TODO: think about this  */
 /*  game itself is 9:16, but should i put some bars on left and right? */
 #define WINDOW_HEIGHT 1024

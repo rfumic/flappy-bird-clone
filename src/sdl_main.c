@@ -101,6 +101,14 @@ int main(int argc, char *argv[]) {
                         game_state.jump_key_pressed = true;
                         break;
                     }
+
+#if FLAPPY_DEBUG
+                    if(event.key.key == SDLK_1) {
+                        game_debug_flags ^= GDF_ALWAYS_SCORE;
+                        break;
+                    }
+#endif
+
                 }
                 case SDL_EVENT_KEY_DOWN: {
 
