@@ -13,6 +13,8 @@ static inline f32 PlatformSineF32(f32 x);
 
 #include "game.c"
 
+#define PLATFORM_USE_VSYNC 1
+
 static inline f32 PlatformSineF32(f32 x)
 {
     return SDL_sinf(x);
@@ -48,6 +50,9 @@ int main(int argc, char *argv[]) {
     SDL_RaiseWindow(window);
 
     SDL_Renderer *renderer = SDL_CreateRenderer(window, NULL);
+#if PLATFORM_USE_VSYNC
+    SDL_SetRenderVSync(renderer, 1);
+#endif
 
     SDL_Texture *texture = SDL_CreateTexture(renderer, 
                                              SDL_PIXELFORMAT_RGBA8888, 
@@ -125,9 +130,10 @@ int main(int argc, char *argv[]) {
         SDL_RenderTexture(renderer, texture, 0, 0);
         SDL_RenderPresent(renderer);
 
-        /* TODO: figure out how to establish a frame rate correctly */
+#if PLATFORM_USE_VSYNC != 1
         SDL_Delay(16);
         /* SDL_Delay(32); */
+#endif
     }
 
     SDL_DestroyWindow(window);
