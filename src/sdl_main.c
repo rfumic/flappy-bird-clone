@@ -3,26 +3,10 @@
 
 
 #include "common.c"
-
-// TODO: move to a platform.h file
-// Platform function signatures / macros
-
-typedef struct {
-    void   *memory;
-    usize  size;
-} LoadedFile;
-
-static inline i32 PlatformGetRandomI32(i32 min_value, i32 max_value);
-static LoadedFile PlatformLoadEntireFile(char *file_path, Arena *arena);
-
-#define PlatformDebugPrint(format_str, ...) SDL_Log(format_str, ##__VA_ARGS__)
-
-static inline f32 PlatformSineF32(f32 x);
-
+#include "platform.h"
 #include "game.c"
 
 #define PLATFORM_USE_VSYNC 1
-#define ASSET_ARENA_SIZE MB(2)
 
 static inline f32 PlatformSineF32(f32 x)
 {

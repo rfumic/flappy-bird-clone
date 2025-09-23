@@ -2,6 +2,7 @@
 #include <stddef.h>
 
 typedef uint8_t u8;
+typedef uint16_t u16;
 typedef int32_t b32;
 typedef int32_t i32;
 typedef uint32_t u32;
@@ -37,6 +38,14 @@ typedef size_t usize;
 #define KB(x) ((x) << 10)
 
 #define MB(x) ((x) << 20)
+
+static inline void swap_u32(u32 *a, u32 *b) 
+{
+    u32 temp = *a;
+    *a = *b;
+    *b = temp;
+}
+
 
 typedef struct {
   u8 *base;

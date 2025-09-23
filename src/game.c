@@ -76,9 +76,10 @@ static inline void DrawPipePair(GameState *game_state, PipePair *pipe_pair,
         u32 *source = (u32 *)game_state->pipe_bitmap.memory;
         u32 *dest = (u32 *)buffer->memory;
 
-        for(i32 y = 0; y < buffer->actual_height; y++) {
-            for(i32 x = 0; x < buffer->width; x++) {
-                *dest++ = *source++;
+        for(i32 y = 0; y < game_state->pipe_bitmap.height; y++) {
+            for(i32 x = 0; x < game_state->pipe_bitmap.width; x++) {
+                /* *dest++ = *source++; */
+                dest[y * buffer->width + x] = source[y * game_state->pipe_bitmap.width + x];
             }
         }
        
@@ -274,10 +275,8 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
         current_pipe = NULL;
         newest_pipe  = GetAvailablePipe(game_screen_buffer);
 
-        *game_state = (GameState) {
-            .jump_key_pressed = 0, 
-            .new_game_started = 0
-        };
+        game_state->jump_key_pressed = 0;
+        game_state->new_game_started = 0;
     }
     
     for(i32 i = 0; 
@@ -366,18 +365,74 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
         bird.velocity = max_fall;
     }
    
+
 #if FLAPPY_DEBUG
     (void)debug_frame_counter;
     debug_frame_counter++;
 #endif
 }
 
+typedef struct __attribute__((packed)) {
+    u16 file_type;
+    u32 file_size;
+    u16 reserved_1;
+    u16 reserved_2;
+    u32 bitmap_offset;
+    u32 size;
+    i32 width;
+    i32 height;
+    u16 planes;
+    u16 bits_per_pixel;
+} BitmapFormatHeader;
+
+/* TODO: move to asset_loader_file? */
+static BitmapAsset LoadBitmapAsset(char *asset_file_path,
+                                   Arena *asset_file_arena)
+{
+    BitmapAsset result = {0};
+    /* TODO: validate file paths 
+             - need to adjust working directory
+    */
+    LoadedFile bitmap_file = 
+        PlatformLoadEntireFile(asset_file_path, asset_file_arena);
+
+    if(bitmap_file.size != 0) {
+        BitmapFormatHeader *header = 
+            (BitmapFormatHeader *) bitmap_file.memory;
+
+        u32 *pixels = (u32 *)((u8 *)bitmap_file.memory + header->bitmap_offset);
+
+
+        // flip rows
+        for(i32 row = 0; row < header->height / 2; row++) {
+            /* TODO: Figure out RGB masks */
+            for(i32 col = 0; col < header->width; col++) {
+                u32 a = pixels[row * header->width + col];
+                u32 b = pixels[(header->height - 1 - row) * header->width + col];
+                a = (a >> 8) | (a << 24);
+                b = (b >> 8) | (b << 24);
+
+                pixels[row * header->width + col] = a;
+                pixels[(header->height - 1 - row) * header->width + col] = b;
+                /* swap_u32(&pixels[row * header->width + col],  */
+                /*          &pixels[(header->height - 1 - row) * header->width + col]); */
+            }
+        }
+
+        result.memory = pixels;
+        result.width = header->width;
+        result.height = header->height;
+    }
+
+    return result;
+}
+
 static void GameSetup(GameState *game_state)
 {
-    /* TODO: validate file paths */
-    LoadedFile pipe_bitmap_file = 
-        PlatformLoadEntireFile("../assets/pipe_1.bmp", 
-                               game_state->asset_file_arena);
-    (void)pipe_bitmap_file;
-    /* game_state->pipe_bitmap = LoadBitmapAsset(pipe_bitmap_file); */
+    game_state->pipe_bitmap = 
+        LoadBitmapAsset("../assets/pipe_1.bmp", game_state->asset_file_arena);
+
+    BitmapAsset test_bitmap = 
+        LoadBitmapAsset("../assets/test_bitmap.bmp", game_state->asset_file_arena);
+        (void)test_bitmap;
 }
