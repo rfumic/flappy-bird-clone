@@ -4,8 +4,16 @@
 
 #include "common.c"
 
+// TODO: move to a platform.h file
 // Platform function signatures / macros
+
+typedef struct {
+    void   *memory;
+    usize  size;
+} LoadedFile;
+
 static inline i32 PlatformGetRandomI32(i32 min_value, i32 max_value);
+static LoadedFile PlatformLoadEntireFile(char *file_path, Arena *arena);
 
 #define PlatformDebugPrint(format_str, ...) SDL_Log(format_str, ##__VA_ARGS__)
 
@@ -14,6 +22,7 @@ static inline f32 PlatformSineF32(f32 x);
 #include "game.c"
 
 #define PLATFORM_USE_VSYNC 1
+#define ASSET_ARENA_SIZE MB(2)
 
 static inline f32 PlatformSineF32(f32 x)
 {
@@ -21,8 +30,39 @@ static inline f32 PlatformSineF32(f32 x)
 }
 
 /* TODO: custom random generator */
-static inline i32 PlatformGetRandomI32(i32 min_value, i32 max_value) {
+static inline i32 PlatformGetRandomI32(i32 min_value, i32 max_value)
+{
     i32 result = min_value + SDL_rand(max_value - min_value);
+
+    return result;
+}
+
+static LoadedFile PlatformLoadEntireFile(char *file_path, Arena *arena)
+{
+    LoadedFile result = {0};
+
+    SDL_PathInfo sdl_path_info;
+    b32 info_loaded = SDL_GetPathInfo(file_path, &sdl_path_info);
+
+    if(info_loaded) {
+        result.size = sdl_path_info.size;
+
+        SDL_IOStream *sdl_stream = 
+            SDL_IOFromFile(file_path, "rb");
+
+        void *file_memory = ArenaAllocArray(arena, byte, result.size);
+
+        usize bytes_read = 
+            SDL_ReadIO(sdl_stream, file_memory, result.size);
+
+        SDL_IOStatus status = SDL_GetIOStatus(sdl_stream);
+        if(bytes_read == 0 && status != SDL_IO_STATUS_EOF) {
+            result = (LoadedFile){0};
+        }
+        SDL_CloseIO(sdl_stream);
+
+        result.memory = file_memory;
+    }
 
     return result;
 }
@@ -75,13 +115,33 @@ int main(int argc, char *argv[]) {
         .playable_height = PercentOf(91, WINDOW_HEIGHT)
     };
 
+    /* TODO: ideally this should allocate generic permanent storage
+             and then the game code splits it into arenas 
+    */
+    u8 *asset_file_memory = calloc(ASSET_ARENA_SIZE, sizeof(u8));
+    if(asset_file_memory  == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_ERROR, 
+                     "Failed to allocate asset memory\n");
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return 1;
+    }
+
+    Arena asset_file_arena;
+    ArenaInit(&asset_file_arena, ASSET_ARENA_SIZE, asset_file_memory);
+
     GameState game_state = {
         .new_game_started = true,
         .delta_time_ms = 0,
+        .asset_file_arena = &asset_file_arena,
     };
+
+    GameSetup(&game_state);
+
 
     u64 current_tick = SDL_GetTicks();
     u64 last_tick;
+    game_debug_flags |= GDF_PRIMITIVE_RENDER;
 
     b32 game_running = true;
     while(game_running) {
@@ -106,6 +166,11 @@ int main(int argc, char *argv[]) {
 #if FLAPPY_DEBUG
                     if(event.key.key == SDLK_1) {
                         game_debug_flags ^= GDF_ALWAYS_SCORE;
+                        break;
+                    }
+
+                    if(event.key.key == SDLK_2) {
+                        game_debug_flags ^= GDF_PRIMITIVE_RENDER;
                         break;
                     }
 #endif

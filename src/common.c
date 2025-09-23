@@ -34,7 +34,42 @@ typedef size_t usize;
 
 #define Max(a,b) (((a)>(b))?(a):(b))
 
-/* TODO: think about this  */
+#define KB(x) ((x) << 10)
+
+#define MB(x) ((x) << 20)
+
+typedef struct {
+  u8 *base;
+  usize size;
+  usize used;
+} Arena;
+
+static inline void ArenaInit(Arena *arena, usize size, u8 *base)
+{
+  Assert(base != NULL);
+  arena->base = base;
+  arena->size = size;
+  arena->used = 0;
+}
+
+static inline void *ArenaAlloc_(Arena *arena, usize size)
+{
+  Assert((arena->used + size) <= arena->size);
+  void *result = arena->base + arena->used;
+  arena->used += size;
+  return result;
+}
+
+#define ArenaAlloc(arena, type) (type *)ArenaAlloc_(arena, sizeof(type))
+#define ArenaAllocArray(arena, type, count)                                  \
+  ArenaAlloc_(arena, sizeof(type) * (count))
+
+
+/* TODO: think about this
+     consider going to even lower resolution, because
+     i want to target browsers
+*/
+
 /*  game itself is 9:16, but should i put some bars on left and right? */
 #define WINDOW_HEIGHT 1024
 /* #define WINDOW_WIDTH WINDOW_HEIGHT */

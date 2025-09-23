@@ -1,6 +1,6 @@
 typedef enum {
-    GDF_ALWAYS_SCORE = (1 << 0), // Shortcut: 1
-    /* GDF_NEXT_FLAG = (1 << 1), */
+    GDF_ALWAYS_SCORE     = (1 << 0), // Shortcut: 1
+    GDF_PRIMITIVE_RENDER = (1 << 1), // Shortcut: 2
 } GameDebugFlags;
 
 global GameDebugFlags game_debug_flags = 0;
@@ -13,9 +13,19 @@ typedef struct {
 } GameScreenBuffer;
 
 typedef struct {
+    void *memory;
+    i32  width;
+    i32  height;
+} BitmapAsset;
+
+typedef struct {
+    Arena *asset_file_arena;
+
     b32 jump_key_pressed;
     b32 new_game_started;
     u64 delta_time_ms;
+
+    BitmapAsset pipe_bitmap;
 } GameState;
 
 static void DrawRectangle(GameScreenBuffer *buffer, i32 min_x, i32 min_y, 
@@ -46,6 +56,7 @@ typedef struct {
     i32 bottom_pipe_y;
 } PipePair;
 
+/* TODO: move these to a state struct */
 global i32 pipe_width = 0;
 global i32 y_between_pipes = 0;
 
@@ -53,42 +64,58 @@ global PipePair *oldest_pipe;
 global PipePair *current_pipe;
 global PipePair *newest_pipe;
 
-static inline void DrawPipePair(PipePair *pipe_pair, GameScreenBuffer *buffer)
+
+static inline void DrawPipePair(GameState *game_state, PipePair *pipe_pair, 
+                                GameScreenBuffer *buffer)
 {
-    /* TODO: this currently doesnt take into account the "ground" */
-    /*       everything is calculated relative to the  whole game screen */
+    b32 bitmap_available = game_state->pipe_bitmap.memory != NULL && 
+                           game_state->pipe_bitmap.width > 0 && 
+                           game_state->pipe_bitmap.height > 0;
 
-    u32 pipe_color = 0x00FF00FF;
+    if(!(game_debug_flags & GDF_PRIMITIVE_RENDER) && bitmap_available) {
+        u32 *source = (u32 *)game_state->pipe_bitmap.memory;
+        u32 *dest = (u32 *)buffer->memory;
+
+        for(i32 y = 0; y < buffer->actual_height; y++) {
+            for(i32 x = 0; x < buffer->width; x++) {
+                *dest++ = *source++;
+            }
+        }
+       
+    } else {
+        /* TODO: this currently doesnt take into account the "ground" */
+        /*       everything is calculated relative to the  whole game screen */
+
+        u32 pipe_color = 0x00FF00FF;
 #if FLAPPY_DEBUG
-    if(pipe_pair == oldest_pipe) {
-        pipe_color = 0xFF0000FF;
-    }
+        if(pipe_pair == oldest_pipe) {
+            pipe_color = 0xFF0000FF;
+        }
 
-    if(pipe_pair == current_pipe) {
-        pipe_color = 0x00FF00FF;
-    }
+        if(pipe_pair == current_pipe) {
+            pipe_color = 0x00FF00FF;
+        }
 
-    if(pipe_pair == newest_pipe) {
-        pipe_color = 0x0000FFFF;
-    }
+        if(pipe_pair == newest_pipe) {
+            pipe_color = 0x0000FFFF;
+        }
 #endif
 
-    // Draw top pipe
-    DrawRectangle(buffer, 
-                  pipe_pair->x, 0, 
-                  pipe_pair->x + pipe_width, 
-                  (pipe_pair->bottom_pipe_y - y_between_pipes), 
-                  /* pipe_color); */
-                  0xFF00FFFF);
+        // Draw top pipe
+        DrawRectangle(buffer, 
+                      pipe_pair->x, 0, 
+                      pipe_pair->x + pipe_width, 
+                      (pipe_pair->bottom_pipe_y - y_between_pipes), 
+                      0xFF00FFFF);
 
-    // Draw bottom pipe
-    DrawRectangle(buffer, 
-                  pipe_pair->x, 
-                  pipe_pair->bottom_pipe_y, 
-                  pipe_pair->x + pipe_width, 
-                  buffer->playable_height, 
-                  pipe_color);
-
+        // Draw bottom pipe
+        DrawRectangle(buffer, 
+                pipe_pair->x, 
+                pipe_pair->bottom_pipe_y, 
+                pipe_pair->x + pipe_width, 
+                buffer->playable_height, 
+                pipe_color);
+    }
 }
 
 static inline i32 GetRandomPipeY(i32 game_screen_height) {
@@ -189,8 +216,10 @@ static inline b32 BirdCollidesWithCurrentPipe()
         i32 bird_x_end = bird.x + bird.width;
 
         b32 intersect_horizontally = 
-            (bird_x_end >= current_pipe->x && bird_x_end <= current_pipe->x + pipe_width) ||
-            (bird.x >= current_pipe->x && bird.x <= current_pipe->x + pipe_width);
+            (bird_x_end >= current_pipe->x && 
+                bird_x_end <= current_pipe->x + pipe_width) ||
+            (bird.x >= current_pipe->x && 
+                bird.x <= current_pipe->x + pipe_width);
         
         b32 intersect_vertically_bottom = 
             bird.y + bird.height >= current_pipe->bottom_pipe_y;
@@ -198,7 +227,8 @@ static inline b32 BirdCollidesWithCurrentPipe()
         b32 intersect_vertically_top = 
             bird.y <= current_pipe->bottom_pipe_y - y_between_pipes;
 
-        b32 intersect_vertically = intersect_vertically_bottom || intersect_vertically_top;
+        b32 intersect_vertically = intersect_vertically_bottom 
+                                   || intersect_vertically_top;
 
         result = intersect_horizontally && intersect_vertically;
     }
@@ -276,12 +306,12 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
             AddAvailablePipe(oldest_pipe);
         }
 
-        DrawPipePair(oldest_pipe, game_screen_buffer);
+        DrawPipePair(game_state, oldest_pipe, game_screen_buffer);
         oldest_pipe->x -= PIPE_MOVEMENT_SPEED * game_state->delta_time_ms;
     }
 
     if(newest_pipe) {
-        DrawPipePair(newest_pipe, game_screen_buffer);
+        DrawPipePair(game_state, newest_pipe, game_screen_buffer);
         newest_pipe->x -= PIPE_MOVEMENT_SPEED * game_state->delta_time_ms;
     }
 
@@ -292,7 +322,7 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
             PlatformDebugPrint("score: %d", current_score);
         }
 
-        DrawPipePair(current_pipe, game_screen_buffer);
+        DrawPipePair(game_state, current_pipe, game_screen_buffer);
         current_pipe->x -= PIPE_MOVEMENT_SPEED * game_state->delta_time_ms;
     }
 
@@ -320,7 +350,9 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
     f32 delta_time = game_state->delta_time_ms / 1000.0f;
 
     // NOTE: this is gravity
-    bird.velocity += (game_screen_buffer->playable_height * 0.002f * 30.0f * 30.0f) * delta_time;
+    bird.velocity += (game_screen_buffer->playable_height 
+                        * 0.002f * 30.0f * 30.0f) 
+                     * delta_time;
     bird.y += bird.velocity * delta_time;
 
 #if FLAPPY_DEBUG
@@ -338,4 +370,14 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
     (void)debug_frame_counter;
     debug_frame_counter++;
 #endif
+}
+
+static void GameSetup(GameState *game_state)
+{
+    /* TODO: validate file paths */
+    LoadedFile pipe_bitmap_file = 
+        PlatformLoadEntireFile("../assets/pipe_1.bmp", 
+                               game_state->asset_file_arena);
+    (void)pipe_bitmap_file;
+    /* game_state->pipe_bitmap = LoadBitmapAsset(pipe_bitmap_file); */
 }
