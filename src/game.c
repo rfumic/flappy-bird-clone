@@ -65,7 +65,40 @@ global PipePair *oldest_pipe;
 global PipePair *current_pipe;
 global PipePair *newest_pipe;
 
-#define ARGB_To_RGB(u32_pixel) (((u32_pixel) >> 24) | ((u32_pixel) << 8))
+#define ARGB_To_RGBA(u32_pixel) (((u32_pixel) >> 24) | ((u32_pixel) << 8))
+
+/* NOTE: Calculates the correct pixel, with linear blending 
+ *       Assumes RGBA
+*/
+static inline u32 ComputePixel(u32 src_pixel, u32 dest_pixel)
+{
+    u32 result = 0;
+
+    // Extract color values
+    f32 alpha = (f32)(src_pixel & 0xFF) / 255.0f;
+
+    f32 src_red   = (f32)((src_pixel >> 24) & 0xFF);
+    f32 src_green = (f32)((src_pixel >> 16) & 0xFF);
+    f32 src_blue  = (f32)((src_pixel >>  8) & 0xFF);
+
+    f32 dest_red   = (f32)((dest_pixel >> 24) & 0xFF);
+    f32 dest_green = (f32)((dest_pixel >> 16) & 0xFF);
+    f32 dest_blue  = (f32)((dest_pixel >>  8) & 0xFF);
+
+    // Calculate alpha blend
+    f32 red   = (1.0f - alpha) * dest_red + alpha * src_red;
+    f32 green = (1.0f - alpha) * dest_green + alpha * src_green;
+    f32 blue  = (1.0f - alpha) * dest_blue + alpha * src_blue;
+
+    // Put back together
+    /* NOTE: the + 0.5f is for correct rounding */
+    result  = (((u32)(red   + 0.5f) << 24) | 
+               ((u32)(green + 0.5f) << 16) | 
+               ((u32)(blue  + 0.5f) <<  8) |
+               0xFF);
+
+    return result;
+}
 
 static inline void DrawPipePair(GameState *game_state, PipePair *pipe_pair, 
                                 GameScreenBuffer *buffer)
@@ -75,27 +108,31 @@ static inline void DrawPipePair(GameState *game_state, PipePair *pipe_pair,
                            game_state->pipe_bitmap.height > 0;
 
     if(!(game_debug_flags & GDF_PRIMITIVE_RENDER) && bitmap_available) {
-        u32 *source = (u32 *)game_state->pipe_bitmap.memory;
+        u32 *src = (u32 *)game_state->pipe_bitmap.memory;
         u32 *dest = (u32 *)buffer->memory;
 
         for(i32 y = 0; y < game_state->pipe_bitmap.height; y++) {
             for(i32 x = 0; x < game_state->pipe_bitmap.width; x++) {
-                /* TODO: alpha handling */
-                dest[y * buffer->width + x] 
-                    = source[y * game_state->pipe_bitmap.width + x];
+                u32 src_pixel = src[y * game_state->pipe_bitmap.width + x];
+                u32 *dest_pixel_ptr = &dest[y * buffer->width + x];
+
+                *dest_pixel_ptr = ComputePixel(src_pixel, *dest_pixel_ptr);
             }
         }
 
+#if 0
         source = (u32 *)game_state->test_bitmap.memory;
 
-        // TODO: this is the test bitmap, REMOVE THIS
+        // NOTE: this is the test bitmap
         for(i32 y = 0; y < game_state->test_bitmap.height; y++) {
             for(i32 x = 0; x < game_state->test_bitmap.width; x++) {
-                u32 pixel = source[y * game_state->test_bitmap.width + x];
-                dest[(y+100) * buffer->width + (100 + x)] = pixel;
+                u32 source_pixel = source[y * game_state->test_bitmap.width + x];
+                u32 *dest_pixel_ptr = &dest[(y+100) * buffer->width + (100 + x)]; 
+                *dest_pixel_ptr =  ComputePixel(source_pixel, *dest_pixel_ptr);
+
             }
         }
-       
+#endif   
     } else {
         u32 pipe_color = 0x00FF00FF;
 #if FLAPPY_DEBUG
@@ -418,11 +455,11 @@ static BitmapAsset LoadBitmapAsset(char *asset_file_path,
         for(i32 row = 0; row < header->height / 2; row++) {
             for(i32 col = 0; col < header->width; col++) {
                 u32 *first = &pixels[row * header->width + col];
-                *first = ARGB_To_RGB(*first);
+                *first = ARGB_To_RGBA(*first);
 
                 u32 *second = &pixels[(header->height - 1 - row) * 
                                       header->width + col];
-                *second = ARGB_To_RGB(*second);
+                *second = ARGB_To_RGBA(*second);
 
                 swap_u32(first, second);
             }

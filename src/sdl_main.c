@@ -125,7 +125,6 @@ int main(int argc, char *argv[]) {
 
     u64 current_tick = SDL_GetTicks();
     u64 last_tick;
-    game_debug_flags |= GDF_PRIMITIVE_RENDER;
 
     b32 game_running = true;
     while(game_running) {
