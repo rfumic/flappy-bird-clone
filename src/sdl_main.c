@@ -92,6 +92,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    /* TODO: GameSetup should fill this in  */
     GameScreenBuffer screen_buffer = {
         .memory = (void *) main_buffer,
         .width = WINDOW_WIDTH,

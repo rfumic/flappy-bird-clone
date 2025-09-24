@@ -10,6 +10,8 @@ typedef struct {
     i32    width;
     i32    actual_height;
     i32    playable_height;
+    u32    bytes_per_pixel;
+    u32    pitch;
 } GameScreenBuffer;
 
 typedef struct {
@@ -100,6 +102,50 @@ static inline u32 ComputePixel(u32 src_pixel, u32 dest_pixel)
     return result;
 }
 
+static inline void DrawBitmap(BitmapAsset *bitmap, GameScreenBuffer *buffer, 
+                              i32 dest_x, i32 dest_y)
+{
+    u32 *src = (u32 *)bitmap->memory;
+    u32 *dest = (u32 *)buffer->memory;
+
+    i32 src_w = bitmap->width;
+    i32 src_h = bitmap->height;
+
+    i32 start_x = 0;
+    i32 start_y = 0;
+    i32 end_x   = src_w;
+    i32 end_y   = src_h;
+
+    if (dest_x < 0) {
+        start_x = -dest_x;
+        dest_x = 0;
+    }
+
+    if (dest_y < 0) {
+        start_y = -dest_y;
+        dest_y = 0;
+    }
+
+    if (dest_x + (end_x - start_x) > buffer->width) {
+        end_x = buffer->width - dest_x + start_x;
+    }
+
+    if (dest_y + (end_y - start_y) > buffer->playable_height) {
+        end_y = buffer->playable_height - dest_y + start_y;
+    }
+
+    for (i32 y = start_y; y < end_y; y++) {
+        for (i32 x = start_x; x < end_x; x++) {
+            u32 src_pixel = src[y * src_w + x];
+            u32 *dest_pixel_ptr =
+                &dest[(dest_y + (y - start_y)) * buffer->width +
+                (dest_x + (x - start_x))];
+
+            *dest_pixel_ptr = ComputePixel(src_pixel, *dest_pixel_ptr);
+        }
+    }
+}
+
 static inline void DrawPipePair(GameState *game_state, PipePair *pipe_pair, 
                                 GameScreenBuffer *buffer)
 {
@@ -108,31 +154,16 @@ static inline void DrawPipePair(GameState *game_state, PipePair *pipe_pair,
                            game_state->pipe_bitmap.height > 0;
 
     if(!(game_debug_flags & GDF_PRIMITIVE_RENDER) && bitmap_available) {
-        u32 *src = (u32 *)game_state->pipe_bitmap.memory;
-        u32 *dest = (u32 *)buffer->memory;
+        BitmapAsset bitmap = game_state->pipe_bitmap;
 
-        for(i32 y = 0; y < game_state->pipe_bitmap.height; y++) {
-            for(i32 x = 0; x < game_state->pipe_bitmap.width; x++) {
-                u32 src_pixel = src[y * game_state->pipe_bitmap.width + x];
-                u32 *dest_pixel_ptr = &dest[y * buffer->width + x];
+        // draw top pipe
+        i32 top_pipe_y = 
+            pipe_pair->bottom_pipe_y - y_between_pipes - bitmap.height;
+        DrawBitmap(&bitmap, buffer, pipe_pair->x, top_pipe_y);
 
-                *dest_pixel_ptr = ComputePixel(src_pixel, *dest_pixel_ptr);
-            }
-        }
+        // draw bottom pipe
+        DrawBitmap(&bitmap, buffer, pipe_pair->x, pipe_pair->bottom_pipe_y);
 
-#if 0
-        source = (u32 *)game_state->test_bitmap.memory;
-
-        // NOTE: this is the test bitmap
-        for(i32 y = 0; y < game_state->test_bitmap.height; y++) {
-            for(i32 x = 0; x < game_state->test_bitmap.width; x++) {
-                u32 source_pixel = source[y * game_state->test_bitmap.width + x];
-                u32 *dest_pixel_ptr = &dest[(y+100) * buffer->width + (100 + x)]; 
-                *dest_pixel_ptr =  ComputePixel(source_pixel, *dest_pixel_ptr);
-
-            }
-        }
-#endif   
     } else {
         u32 pipe_color = 0x00FF00FF;
 #if FLAPPY_DEBUG
