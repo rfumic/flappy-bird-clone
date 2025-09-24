@@ -26,6 +26,7 @@ typedef struct {
     u64 delta_time_ms;
 
     BitmapAsset pipe_bitmap;
+    BitmapAsset test_bitmap;
 } GameState;
 
 static void DrawRectangle(GameScreenBuffer *buffer, i32 min_x, i32 min_y, 
@@ -64,6 +65,7 @@ global PipePair *oldest_pipe;
 global PipePair *current_pipe;
 global PipePair *newest_pipe;
 
+#define ARGB_To_RGB(u32_pixel) (((u32_pixel) >> 24) | ((u32_pixel) << 8))
 
 static inline void DrawPipePair(GameState *game_state, PipePair *pipe_pair, 
                                 GameScreenBuffer *buffer)
@@ -78,15 +80,23 @@ static inline void DrawPipePair(GameState *game_state, PipePair *pipe_pair,
 
         for(i32 y = 0; y < game_state->pipe_bitmap.height; y++) {
             for(i32 x = 0; x < game_state->pipe_bitmap.width; x++) {
-                /* *dest++ = *source++; */
-                dest[y * buffer->width + x] = source[y * game_state->pipe_bitmap.width + x];
+                /* TODO: alpha handling */
+                dest[y * buffer->width + x] 
+                    = source[y * game_state->pipe_bitmap.width + x];
+            }
+        }
+
+        source = (u32 *)game_state->test_bitmap.memory;
+
+        // TODO: this is the test bitmap, REMOVE THIS
+        for(i32 y = 0; y < game_state->test_bitmap.height; y++) {
+            for(i32 x = 0; x < game_state->test_bitmap.width; x++) {
+                u32 pixel = source[y * game_state->test_bitmap.width + x];
+                dest[(y+100) * buffer->width + (100 + x)] = pixel;
             }
         }
        
     } else {
-        /* TODO: this currently doesnt take into account the "ground" */
-        /*       everything is calculated relative to the  whole game screen */
-
         u32 pipe_color = 0x00FF00FF;
 #if FLAPPY_DEBUG
         if(pipe_pair == oldest_pipe) {
@@ -386,6 +396,7 @@ typedef struct __attribute__((packed)) {
 } BitmapFormatHeader;
 
 /* TODO: move to asset_loader_file? */
+/* NOTE: this only loads BMPs created with aesprite, not generic */
 static BitmapAsset LoadBitmapAsset(char *asset_file_path,
                                    Arena *asset_file_arena)
 {
@@ -405,17 +416,15 @@ static BitmapAsset LoadBitmapAsset(char *asset_file_path,
 
         // flip rows
         for(i32 row = 0; row < header->height / 2; row++) {
-            /* TODO: Figure out RGB masks */
             for(i32 col = 0; col < header->width; col++) {
-                u32 a = pixels[row * header->width + col];
-                u32 b = pixels[(header->height - 1 - row) * header->width + col];
-                a = (a >> 8) | (a << 24);
-                b = (b >> 8) | (b << 24);
+                u32 *first = &pixels[row * header->width + col];
+                *first = ARGB_To_RGB(*first);
 
-                pixels[row * header->width + col] = a;
-                pixels[(header->height - 1 - row) * header->width + col] = b;
-                /* swap_u32(&pixels[row * header->width + col],  */
-                /*          &pixels[(header->height - 1 - row) * header->width + col]); */
+                u32 *second = &pixels[(header->height - 1 - row) * 
+                                      header->width + col];
+                *second = ARGB_To_RGB(*second);
+
+                swap_u32(first, second);
             }
         }
 
@@ -432,7 +441,7 @@ static void GameSetup(GameState *game_state)
     game_state->pipe_bitmap = 
         LoadBitmapAsset("../assets/pipe_1.bmp", game_state->asset_file_arena);
 
-    BitmapAsset test_bitmap = 
-        LoadBitmapAsset("../assets/test_bitmap.bmp", game_state->asset_file_arena);
-        (void)test_bitmap;
+    game_state->test_bitmap = 
+        LoadBitmapAsset("../assets/test_bitmap.bmp", 
+                        game_state->asset_file_arena);
 }
