@@ -22,6 +22,8 @@ typedef struct {
 
 typedef struct {
     Arena *asset_file_arena;
+    Arena temp_arena;
+    String executable_base_path;
 
     b32 jump_key_pressed;
     b32 new_game_started;
@@ -465,15 +467,37 @@ typedef struct __attribute__((packed)) {
 
 /* TODO: move to asset_loader_file? */
 /* NOTE: this only loads BMPs created with aesprite, not generic */
-static BitmapAsset LoadBitmapAsset(char *asset_file_path,
-                                   Arena *asset_file_arena)
+static BitmapAsset LoadBitmapAsset(GameState *game_state,
+                                   String asset_file_name,
+                                   Arena *asset_file_arena,
+                                   Arena temp_arena)
 {
     BitmapAsset result = {0};
-    /* TODO: validate file paths 
-             - need to adjust working directory
-    */
+
+    String exe_path = game_state->executable_base_path;
+    String assets_folder = S("../assets/");
+
+    // create full asset file path
+    u8 *full_file_path = ArenaAllocArray(&temp_arena, u8, 
+                                         exe_path.length + 
+                                         assets_folder.length + 
+                                         asset_file_name.length);
+    i32 curr = 0;
+
+    for(i32 i = 0; i < exe_path.length; i++) {
+        full_file_path[curr++] = exe_path.data[i];
+    }
+
+    for(i32 i = 0; i < assets_folder.length; i++) {
+        full_file_path[curr++] = assets_folder.data[i];
+    }
+
+    for(i32 i = 0; i < asset_file_name.length; i++) {
+        full_file_path[curr++] = asset_file_name.data[i];
+    }
+
     LoadedFile bitmap_file = 
-        PlatformLoadEntireFile(asset_file_path, asset_file_arena);
+        PlatformLoadEntireFile((char *)full_file_path, asset_file_arena);
 
     if(bitmap_file.size != 0) {
         BitmapFormatHeader *header = 
@@ -504,12 +528,19 @@ static BitmapAsset LoadBitmapAsset(char *asset_file_path,
     return result;
 }
 
-static void GameSetup(GameState *game_state)
+static void LoadAllAssets(GameState *game_state)
 {
     game_state->pipe_bitmap = 
-        LoadBitmapAsset("../assets/pipe_1.bmp", game_state->asset_file_arena);
+        LoadBitmapAsset(game_state, S("pipe_1.bmp"), 
+                        game_state->asset_file_arena, 
+                        game_state->temp_arena);
 
     game_state->test_bitmap = 
-        LoadBitmapAsset("../assets/test_bitmap.bmp", 
-                        game_state->asset_file_arena);
+        LoadBitmapAsset(game_state, S("test_bitmap.bmp"), 
+                        game_state->asset_file_arena,
+                        game_state->temp_arena);
+}
+static void GameSetup(GameState *game_state)
+{
+    LoadAllAssets(game_state);
 }

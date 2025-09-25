@@ -103,22 +103,33 @@ int main(int argc, char *argv[]) {
     /* TODO: ideally this should allocate generic permanent storage
              and then the game code splits it into arenas 
     */
-    u8 *asset_file_memory = calloc(ASSET_ARENA_SIZE, sizeof(u8));
-    if(asset_file_memory  == NULL) {
+    u8 *usable_memory = calloc(ASSET_ARENA_SIZE + TEMPORARY_ARENA_SIZE, sizeof(u8));
+    if(usable_memory == NULL) {
         SDL_LogError(SDL_LOG_CATEGORY_ERROR, 
-                     "Failed to allocate asset memory\n");
+                     "Failed to allocate game memory\n");
         SDL_DestroyWindow(window);
         SDL_Quit();
         return 1;
     }
 
     Arena asset_file_arena;
-    ArenaInit(&asset_file_arena, ASSET_ARENA_SIZE, asset_file_memory);
+    ArenaInit(&asset_file_arena, ASSET_ARENA_SIZE, usable_memory);
+
+    Arena temp_arena;
+    ArenaInit(&temp_arena, TEMPORARY_ARENA_SIZE, &usable_memory[ASSET_ARENA_SIZE]);
+
+    const char *base_path = SDL_GetBasePath();
+    String executable_base_path = {
+        .data = (u8 *)base_path,
+        .length = strlen(base_path)
+    };
 
     GameState game_state = {
         .new_game_started = true,
         .delta_time_ms = 0,
         .asset_file_arena = &asset_file_arena,
+        .temp_arena = temp_arena,
+        .executable_base_path = executable_base_path,
     };
 
     GameSetup(&game_state);

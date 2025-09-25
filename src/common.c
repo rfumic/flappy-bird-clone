@@ -46,7 +46,9 @@ static inline void swap_u32(u32 *a, u32 *b)
     *b = temp;
 }
 
-
+////////////////////
+/// Arenas
+////////////////////
 typedef struct {
   u8 *base;
   usize size;
@@ -72,6 +74,18 @@ static inline void *ArenaAlloc_(Arena *arena, usize size)
 #define ArenaAlloc(arena, type) (type *)ArenaAlloc_(arena, sizeof(type))
 #define ArenaAllocArray(arena, type, count)                                  \
   ArenaAlloc_(arena, sizeof(type) * (count))
+
+////////////////////
+/// Strings
+////////////////////
+#define LengthOf(str) (ArrayCount(str) - 1)
+
+#define S(str) (String){(u8 *) str, LengthOf(str)}
+
+typedef struct {
+    u8   *data;
+    size length;
+} String;
 
 
 /* TODO: think about this

@@ -12,6 +12,7 @@ static inline f32 PlatformSineF32(f32 x);
 
 #define PlatformDebugPrint(format_str, ...) SDL_Log(format_str, ##__VA_ARGS__)
 
-#define ASSET_ARENA_SIZE MB(2)
+#define ASSET_ARENA_SIZE     MB(2)
+#define TEMPORARY_ARENA_SIZE MB(1)
 
 #endif /* PLATFORM_H_ */
