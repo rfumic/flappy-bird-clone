@@ -92,17 +92,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    /* TODO: GameSetup should fill this in  */
-    GameScreenBuffer screen_buffer = {
-        .memory = (void *) main_buffer,
-        .width = WINDOW_WIDTH,
-        .actual_height = WINDOW_HEIGHT,
-        .playable_height = PercentOf(91, WINDOW_HEIGHT)
-    };
 
-    /* TODO: ideally this should allocate generic permanent storage
-             and then the game code splits it into arenas 
-    */
     u8 *usable_memory = calloc(ASSET_ARENA_SIZE + TEMPORARY_ARENA_SIZE, sizeof(u8));
     if(usable_memory == NULL) {
         SDL_LogError(SDL_LOG_CATEGORY_ERROR, 
@@ -112,27 +102,22 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    
     Arena asset_file_arena;
-    ArenaInit(&asset_file_arena, ASSET_ARENA_SIZE, usable_memory);
+    GameScreenBuffer screen_buffer;
+    GameState game_state;
+    
 
-    Arena temp_arena;
-    ArenaInit(&temp_arena, TEMPORARY_ARENA_SIZE, &usable_memory[ASSET_ARENA_SIZE]);
-
-    const char *base_path = SDL_GetBasePath();
-    String executable_base_path = {
-        .data = (u8 *)base_path,
-        .length = strlen(base_path)
+    GameSetupArgs setup_args = {
+        .main_window_buffer  = (void *) main_buffer,
+        .usable_memory       = (void *) usable_memory,
+        .asset_file_arena    = &asset_file_arena,
+        .game_screen_buffer  = &screen_buffer,
+        .game_base_path      = SDL_GetBasePath(),
+        .game_state          = &game_state,
     };
 
-    GameState game_state = {
-        .new_game_started = true,
-        .delta_time_ms = 0,
-        .asset_file_arena = &asset_file_arena,
-        .temp_arena = temp_arena,
-        .executable_base_path = executable_base_path,
-    };
-
-    GameSetup(&game_state);
+    GameSetup(setup_args);
 
 
     u64 current_tick = SDL_GetTicks();

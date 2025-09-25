@@ -87,6 +87,14 @@ typedef struct {
     size length;
 } String;
 
+static inline size StringLength(const char *input) 
+{
+    const char *start = input;
+    while (*input++ != '\0')
+        ;
+
+    return input - start - 1;
+}
 
 /* TODO: think about this
      consider going to even lower resolution, because

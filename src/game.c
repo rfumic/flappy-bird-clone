@@ -528,7 +528,7 @@ static BitmapAsset LoadBitmapAsset(GameState *game_state,
     return result;
 }
 
-static void LoadAllAssets(GameState *game_state)
+static inline void LoadAllAssets(GameState *game_state)
 {
     game_state->pipe_bitmap = 
         LoadBitmapAsset(game_state, S("pipe_1.bmp"), 
@@ -540,7 +540,45 @@ static void LoadAllAssets(GameState *game_state)
                         game_state->asset_file_arena,
                         game_state->temp_arena);
 }
-static void GameSetup(GameState *game_state)
+
+typedef struct {
+    // allocated buffer
+    void *main_window_buffer;
+    // allocated memory for arenas
+    u8 *usable_memory;
+    // empty struct on main stack frame
+    GameScreenBuffer *game_screen_buffer;
+    // empty struct on main stack frame
+    GameState *game_state;
+    // empty struct on main stack frame
+    Arena *asset_file_arena;
+    // base path game executable
+    const char *game_base_path;
+} GameSetupArgs;
+
+static void GameSetup(GameSetupArgs args)
 {
-    LoadAllAssets(game_state);
+    args.game_screen_buffer->memory = args.main_window_buffer;
+    args.game_screen_buffer->width = WINDOW_WIDTH;
+    args.game_screen_buffer->actual_height = WINDOW_HEIGHT;
+    args.game_screen_buffer->playable_height = PercentOf(91, WINDOW_HEIGHT);
+
+    ArenaInit(args.asset_file_arena, ASSET_ARENA_SIZE, args.usable_memory);
+
+    Arena temp_arena;
+    ArenaInit(&temp_arena, TEMPORARY_ARENA_SIZE, &args.usable_memory[ASSET_ARENA_SIZE]);
+
+    String executable_base_path = {
+        .data = (u8 *) args.game_base_path,
+        .length = StringLength(args.game_base_path)
+    };
+
+    args.game_state->new_game_started = true;
+    args.game_state->delta_time_ms = 0;
+    args.game_state->asset_file_arena = args.asset_file_arena;
+    args.game_state->temp_arena = temp_arena;
+    args.game_state->executable_base_path = executable_base_path;
+
+    LoadAllAssets(args.game_state);
+
 }
