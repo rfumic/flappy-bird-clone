@@ -102,22 +102,12 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    
-    Arena asset_file_arena;
-    GameScreenBuffer screen_buffer;
-    GameState game_state;
-    
+    GameSetupResult setup_result = GameSetup((void *) main_buffer, 
+                                             (void *) usable_memory, 
+                                             (u8 *)SDL_GetBasePath());
 
-    GameSetupArgs setup_args = {
-        .main_window_buffer  = (void *) main_buffer,
-        .usable_memory       = (void *) usable_memory,
-        .asset_file_arena    = &asset_file_arena,
-        .game_screen_buffer  = &screen_buffer,
-        .game_base_path      = SDL_GetBasePath(),
-        .game_state          = &game_state,
-    };
-
-    GameSetup(setup_args);
+    GameScreenBuffer screen_buffer = setup_result.game_screen_buffer;
+    GameState game_state = setup_result.game_state;
 
 
     u64 current_tick = SDL_GetTicks();

@@ -87,9 +87,9 @@ typedef struct {
     size length;
 } String;
 
-static inline size StringLength(const char *input) 
+static inline size StringLength(u8 *input) 
 {
-    const char *start = input;
+    u8 *start = input;
     while (*input++ != '\0')
         ;
 
