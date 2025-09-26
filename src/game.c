@@ -3,8 +3,6 @@ typedef enum {
     GDF_PRIMITIVE_RENDER = (1 << 1), // Shortcut: 2
 } GameDebugFlags;
 
-global GameDebugFlags game_debug_flags = 0;
-
 typedef struct {
     void  *memory;
     i32    width;
@@ -25,10 +23,14 @@ typedef struct {
     Arena asset_file_arena;
     Arena temp_arena;
     String executable_base_path;
+    GameDebugFlags game_debug_flags;
 
     b32 jump_key_pressed;
     b32 new_game_started;
     u64 delta_time_ms;
+
+    i32 pipe_width;
+    i32 y_between_pipes;
 
     BitmapAsset pipe_bitmap;
     BitmapAsset test_bitmap;
@@ -63,9 +65,6 @@ typedef struct {
 } PipePair;
 
 /* TODO: move these to a state struct */
-global i32 pipe_width = 0;
-global i32 y_between_pipes = 0;
-
 global PipePair *oldest_pipe;
 global PipePair *current_pipe;
 global PipePair *newest_pipe;
@@ -156,12 +155,12 @@ static inline void DrawPipePair(GameState *game_state, PipePair *pipe_pair,
                            game_state->pipe_bitmap.width > 0 && 
                            game_state->pipe_bitmap.height > 0;
 
-    if(!(game_debug_flags & GDF_PRIMITIVE_RENDER) && bitmap_available) {
+    if(!(game_state->game_debug_flags & GDF_PRIMITIVE_RENDER) && bitmap_available) {
         BitmapAsset bitmap = game_state->pipe_bitmap;
 
         // draw top pipe
         i32 top_pipe_y = 
-            pipe_pair->bottom_pipe_y - y_between_pipes - bitmap.height;
+            pipe_pair->bottom_pipe_y - game_state->y_between_pipes - bitmap.height;
         DrawBitmap(&bitmap, buffer, pipe_pair->x, top_pipe_y);
 
         // draw bottom pipe
@@ -186,24 +185,25 @@ static inline void DrawPipePair(GameState *game_state, PipePair *pipe_pair,
         // Draw top pipe
         DrawRectangle(buffer, 
                       pipe_pair->x, 0, 
-                      pipe_pair->x + pipe_width, 
-                      (pipe_pair->bottom_pipe_y - y_between_pipes), 
+                      pipe_pair->x + game_state->pipe_width, 
+                      (pipe_pair->bottom_pipe_y - game_state->y_between_pipes), 
                       0xFF00FFFF);
 
         // Draw bottom pipe
         DrawRectangle(buffer, 
                 pipe_pair->x, 
                 pipe_pair->bottom_pipe_y, 
-                pipe_pair->x + pipe_width, 
+                pipe_pair->x + game_state->pipe_width, 
                 buffer->playable_height, 
                 pipe_color);
     }
 }
 
-static inline i32 GetRandomPipeY(i32 game_screen_height) {
+static inline i32 GetRandomPipeY(GameState *game_state, i32 game_screen_height) {
     i32 result;
 
-    i32 y_margin_top    = PercentOf(10, game_screen_height) + y_between_pipes;
+    i32 y_margin_top    = PercentOf(10, game_screen_height) + 
+                          game_state->y_between_pipes;
     i32 y_margin_bottom = PercentOf(90, game_screen_height);
 
     result = PlatformGetRandomI32(y_margin_top, y_margin_bottom);
@@ -237,7 +237,8 @@ static inline void AddAvailablePipe(PipePair *new_pipe)
     }
 }
 
-static inline PipePair *GetAvailablePipe(GameScreenBuffer *screen_buffer) 
+static inline PipePair *GetAvailablePipe(GameScreenBuffer *screen_buffer,
+                                         GameState *game_state) 
 {
     Assert(pipe_queue.count >= 0);
 
@@ -246,10 +247,10 @@ static inline PipePair *GetAvailablePipe(GameScreenBuffer *screen_buffer)
     if(pipe_queue.count > 0) {
         result = pipe_queue.pipes[0];
         result->x = screen_buffer->width;
-        result->bottom_pipe_y = GetRandomPipeY(screen_buffer->playable_height);
+        result->bottom_pipe_y = GetRandomPipeY(game_state, screen_buffer->playable_height);
 
 #if FLAPPY_DEBUG
-        if(game_debug_flags & GDF_ALWAYS_SCORE) {
+        if(game_state->game_debug_flags & GDF_ALWAYS_SCORE) {
             result->bottom_pipe_y = 700;
         }
 #endif
@@ -291,7 +292,7 @@ static void DrawBird(GameScreenBuffer *game_screen_buffer)
                   bird_color);
 }
 
-static inline b32 BirdCollidesWithCurrentPipe()
+static inline b32 BirdCollidesWithCurrentPipe(GameState *game_state)
 {
     b32 result = false;
     if(current_pipe) {
@@ -299,15 +300,15 @@ static inline b32 BirdCollidesWithCurrentPipe()
 
         b32 intersect_horizontally = 
             (bird_x_end >= current_pipe->x && 
-                bird_x_end <= current_pipe->x + pipe_width) ||
+                bird_x_end <= current_pipe->x + game_state->pipe_width) ||
             (bird.x >= current_pipe->x && 
-                bird.x <= current_pipe->x + pipe_width);
+                bird.x <= current_pipe->x + game_state->pipe_width);
         
         b32 intersect_vertically_bottom = 
             bird.y + bird.height >= current_pipe->bottom_pipe_y;
 
         b32 intersect_vertically_top = 
-            bird.y <= current_pipe->bottom_pipe_y - y_between_pipes;
+            bird.y <= current_pipe->bottom_pipe_y - game_state->y_between_pipes;
 
         b32 intersect_vertically = intersect_vertically_bottom 
                                    || intersect_vertically_top;
@@ -329,9 +330,6 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
 #endif
 
     if(game_state->new_game_started) {
-        y_between_pipes = PercentOf(30, game_screen_buffer->playable_height);
-        pipe_width      = PercentOf(17, game_screen_buffer->width);
-
         bird.width  = PercentOf(11, game_screen_buffer->width);
         bird.height = PercentOf(7, game_screen_buffer->playable_height);
         bird.y      = game_screen_buffer->playable_height / 2;
@@ -354,7 +352,7 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
 
         oldest_pipe  = NULL;
         current_pipe = NULL;
-        newest_pipe  = GetAvailablePipe(game_screen_buffer);
+        newest_pipe  = GetAvailablePipe(game_screen_buffer, game_state);
 
         game_state->jump_key_pressed = 0;
         game_state->new_game_started = 0;
@@ -366,23 +364,24 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
         ((u32 *)game_screen_buffer->memory)[i] = 0xFFFF00FF;
     }
 
-    if ((newest_pipe->x + pipe_width / 2) <= game_screen_buffer->width / 2) {
+    if ((newest_pipe->x + game_state->pipe_width / 2) 
+         <= game_screen_buffer->width / 2) {
         oldest_pipe = current_pipe;
 
         current_pipe = newest_pipe;
         can_score = 1;
 
-        newest_pipe = GetAvailablePipe(game_screen_buffer);
+        newest_pipe = GetAvailablePipe(game_screen_buffer, game_state);
     }
 
     if(bird.y + bird.height >= game_screen_buffer->playable_height ||
-       BirdCollidesWithCurrentPipe()) {
+       BirdCollidesWithCurrentPipe(game_state)) {
         game_state->new_game_started = true;
         return;
     }
 
     if(oldest_pipe) {
-        if (oldest_pipe->x + pipe_width <= 0) {
+        if (oldest_pipe->x + game_state->pipe_width <= 0) {
             AddAvailablePipe(oldest_pipe);
         }
 
@@ -437,7 +436,7 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
     bird.y += bird.velocity * delta_time;
 
 #if FLAPPY_DEBUG
-    if(game_debug_flags & GDF_ALWAYS_SCORE) {
+    if(game_state->game_debug_flags & GDF_ALWAYS_SCORE) {
         bird.y = game_screen_buffer->playable_height / 2;
     }
 #endif
@@ -544,7 +543,7 @@ typedef struct {
 
 static GameSetupResult GameSetup(void *main_window_buffer, void *usable_memory, u8 *game_base_path)
 {
-    GameSetupResult result;
+    GameSetupResult result = {0};
 
     result.game_screen_buffer.memory          = main_window_buffer;
     result.game_screen_buffer.actual_height   = WINDOW_HEIGHT;
@@ -567,6 +566,8 @@ static GameSetupResult GameSetup(void *main_window_buffer, void *usable_memory, 
     result.game_state.asset_file_arena = asset_file_arena;
     result.game_state.temp_arena = temp_arena;
     result.game_state.executable_base_path = executable_base_path;
+    result.game_state.y_between_pipes = PercentOf(30, result.game_screen_buffer.playable_height);
+    result.game_state.pipe_width = PercentOf(17, result.game_screen_buffer.width);
 
     LoadAllAssets(&result.game_state);
 

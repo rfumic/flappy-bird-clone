@@ -135,12 +135,12 @@ int main(int argc, char *argv[]) {
 
 #if FLAPPY_DEBUG
                     if(event.key.key == SDLK_1) {
-                        game_debug_flags ^= GDF_ALWAYS_SCORE;
+                        game_state.game_debug_flags ^= GDF_ALWAYS_SCORE;
                         break;
                     }
 
                     if(event.key.key == SDLK_2) {
-                        game_debug_flags ^= GDF_PRIMITIVE_RENDER;
+                        game_state.game_debug_flags ^= GDF_PRIMITIVE_RENDER;
                         break;
                     }
 #endif
