@@ -267,8 +267,7 @@ static inline PipePair *GetAvailablePipe(GameScreenBuffer *screen_buffer,
 
 global PipePair pipes[3];
 
-#define PIPE_MOVEMENT_SPEED 0.25
-
+#define GetPipeMovementSpeed(window_width) (0.0004340277778 * window_width)
 
 typedef struct {
     i32 y;
@@ -277,8 +276,6 @@ typedef struct {
     i32 width;
     f32 velocity;
 } Bird;
-
-#define BIRD_FALLING_RATE 10
 
 global Bird bird;
 
@@ -386,13 +383,12 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
         }
 
         DrawPipePair(game_state, oldest_pipe, game_screen_buffer);
-        /* TODO: make pipe movement NOT resolution dependent */
-        oldest_pipe->x -= PIPE_MOVEMENT_SPEED * game_state->delta_time_ms;
+        oldest_pipe->x -= GetPipeMovementSpeed(game_screen_buffer->width) * game_state->delta_time_ms;
     }
 
     if(newest_pipe) {
         DrawPipePair(game_state, newest_pipe, game_screen_buffer);
-        newest_pipe->x -= PIPE_MOVEMENT_SPEED * game_state->delta_time_ms;
+        newest_pipe->x -= GetPipeMovementSpeed(game_screen_buffer->width) * game_state->delta_time_ms;
     }
 
     if(current_pipe) {
@@ -403,7 +399,7 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
         }
 
         DrawPipePair(game_state, current_pipe, game_screen_buffer);
-        current_pipe->x -= PIPE_MOVEMENT_SPEED * game_state->delta_time_ms;
+        current_pipe->x -= GetPipeMovementSpeed(game_screen_buffer->width) * game_state->delta_time_ms;
     }
 
     // NOTE: DrawGround

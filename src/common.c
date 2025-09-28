@@ -103,5 +103,6 @@ static inline size StringLength(u8 *input)
 
 /*  game itself is 9:16, but should i put some bars on left and right? */
 #define WINDOW_HEIGHT 1024
-/* #define WINDOW_WIDTH WINDOW_HEIGHT */
+/* #define WINDOW_HEIGHT (1024/2) */
 #define WINDOW_WIDTH 576
+/* #define WINDOW_WIDTH (576/2) */
