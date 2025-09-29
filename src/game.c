@@ -23,6 +23,22 @@ typedef struct {
     i32  height;
 } BitmapAsset;
 
+typedef struct {
+    i32 y;
+    i32 x;
+    i32 height;
+    i32 width;
+    f32 velocity;
+} Bird;
+
+typedef enum {
+    CM_NONE = 0,
+    CM_NEW_GAME,
+    CM_PLAYING,
+    CM_GET_READY,
+    CM_COUNT,
+} CurrentMode;
+
 // NOTE: this should get passed by pointer
 typedef struct {
     Arena asset_file_arena;
@@ -31,9 +47,10 @@ typedef struct {
     GameDebugFlags game_debug_flags;
 
     b32 jump_key_pressed;
-    b32 new_game_started;
+    CurrentMode current_mode;
     u64 delta_time_ms;
 
+    Bird bird;
     i32 pipe_width;
     i32 y_between_pipes;
 
@@ -274,20 +291,10 @@ global PipePair pipes[3];
 
 #define GetPipeMovementSpeed(window_width) (0.0004340277778 * window_width / 2)
 
-typedef struct {
-    i32 y;
-    i32 x;
-    i32 height;
-    i32 width;
-    f32 velocity;
-} Bird;
-
-global Bird bird;
-
-static void DrawBird(GameScreenBuffer *game_screen_buffer) 
+static void DrawBird(GameState *game_state, GameScreenBuffer *game_screen_buffer) 
 {
-
-    u32 bird_color  = COLOR_RED; 
+    u32 bird_color  = COLOR_WHITE; 
+    Bird bird = game_state->bird;
 
     DrawRectangle(game_screen_buffer, bird.x, bird.y, 
                   bird.x + bird.width, bird.y + bird.height,
@@ -297,6 +304,8 @@ static void DrawBird(GameScreenBuffer *game_screen_buffer)
 static inline b32 BirdCollidesWithCurrentPipe(GameState *game_state)
 {
     b32 result = false;
+    Bird bird = game_state->bird;
+
     if(current_pipe) {
         i32 bird_x_end = bird.x + bird.width;
 
@@ -331,13 +340,11 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
     static u32 debug_frame_counter = 0;
 #endif
 
-    if(game_state->new_game_started) {
-        bird.width  = PercentOf(11, game_screen_buffer->width);
-        bird.height = PercentOf(7, game_screen_buffer->playable_height);
-        bird.y      = game_screen_buffer->playable_height / 2;
-        bird.x      = (PercentOf(28.67, game_screen_buffer->width) 
-                        - (bird.width / 2));
-        bird.velocity = 0;
+    if(game_state->current_mode == CM_NEW_GAME) {
+        game_state->bird.velocity = 0;
+        game_state->bird.y = game_screen_buffer->playable_height / 2;
+        game_state->bird.x = (PercentOf(28.67, game_screen_buffer->width) 
+                              - (game_state->bird.width / 2));
 
         current_score = 0;
         can_score = true;
@@ -357,7 +364,7 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
         newest_pipe  = GetAvailablePipe(game_screen_buffer, game_state);
 
         game_state->jump_key_pressed = 0;
-        game_state->new_game_started = 0;
+        game_state->current_mode = CM_PLAYING;
     }
     
     for(i32 i = 0; 
@@ -376,9 +383,9 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
         newest_pipe = GetAvailablePipe(game_screen_buffer, game_state);
     }
 
-    if(bird.y + bird.height >= game_screen_buffer->playable_height ||
+    if(game_state->bird.y + game_state->bird.height >= game_screen_buffer->playable_height ||
        BirdCollidesWithCurrentPipe(game_state)) {
-        game_state->new_game_started = true;
+        game_state->current_mode = CM_NEW_GAME;
         return;
     }
 
@@ -397,7 +404,7 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
     }
 
     if(current_pipe) {
-        if(bird.x > current_pipe->x && can_score) {
+        if(game_state->bird.x > current_pipe->x && can_score) {
             current_score++;
             can_score = 0;
             PlatformDebugPrint("score: %d", current_score);
@@ -419,32 +426,32 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
                       color);
     }
 
-    DrawBird(game_screen_buffer);
+    DrawBird(game_state, game_screen_buffer);
 
     /* TODO: Figure out how to get these speeds just right */
 
     if(game_state->jump_key_pressed) {
-        bird.velocity = -(game_screen_buffer->playable_height * 0.6f);
+        game_state->bird.velocity = -(game_screen_buffer->playable_height * 0.6f);
         game_state->jump_key_pressed = false;
     }
 
     f32 delta_time = game_state->delta_time_ms / 1000.0f;
 
     // NOTE: this is gravity
-    bird.velocity += (game_screen_buffer->playable_height 
-                        * 0.002f * 30.0f * 30.0f) 
-                     * delta_time;
-    bird.y += bird.velocity * delta_time;
+    game_state->bird.velocity += (game_screen_buffer->playable_height 
+                                  * 0.002f * 30.0f * 30.0f) 
+                                  * delta_time;
+    game_state->bird.y += game_state->bird.velocity * delta_time;
 
 #if FLAPPY_DEBUG
     if(game_state->game_debug_flags & GDF_ALWAYS_SCORE) {
-        bird.y = game_screen_buffer->playable_height / 2;
+        game_state->bird.y = game_screen_buffer->playable_height / 2;
     }
 #endif
     
     f32 max_fall = game_screen_buffer->playable_height * 0.03f * 30.0f;
-    if(bird.velocity > max_fall) {
-        bird.velocity = max_fall;
+    if(game_state->bird.velocity > max_fall) {
+        game_state->bird.velocity = max_fall;
     }
    
 
@@ -470,8 +477,7 @@ typedef struct __attribute__((packed)) {
 /* TODO: move to asset_loader_file? */
 /* NOTE: this only loads BMPs created with aesprite, not generic
  *       that have been exported after a flatten
- *                 
- * */
+ */
 static BitmapAsset LoadBitmapAsset(GameState *game_state,
                                    String asset_file_name)
 {
@@ -565,13 +571,21 @@ static GameSetupResult GameSetup(void *main_window_buffer, void *usable_memory, 
         .length = StringLength(game_base_path)
     };
 
-    result.game_state.new_game_started = true;
+    // XXX: here XXX
+    result.game_state.current_mode = CM_NEW_GAME;
     result.game_state.delta_time_ms = 0;
     result.game_state.asset_file_arena = asset_file_arena;
     result.game_state.temp_arena = temp_arena;
     result.game_state.executable_base_path = executable_base_path;
     result.game_state.y_between_pipes = PercentOf(30, result.game_screen_buffer.playable_height);
     result.game_state.pipe_width = PercentOf(17, result.game_screen_buffer.width);
+
+    result.game_state.bird.width = PercentOf(11, result.game_screen_buffer.width);
+    result.game_state.bird.height = PercentOf(7, result.game_screen_buffer.playable_height);
+    result.game_state.bird.y = result.game_screen_buffer.playable_height / 2;
+    result.game_state.bird.x = (PercentOf(28.67, result.game_screen_buffer.width) 
+                                - (result.game_state.bird.width / 2));
+    result.game_state.bird.velocity = 0;
 
     LoadAllAssets(&result.game_state);
 
