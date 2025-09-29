@@ -8,6 +8,7 @@ typedef enum {
     GDF_PRIMITIVE_RENDER = (1 << 1), // Shortcut: 2
 } GameDebugFlags;
 
+/* TODO: why isn't this in GameState? */
 typedef struct {
     void  *memory;
     i32    width;
@@ -33,7 +34,6 @@ typedef struct {
 
 typedef enum {
     CM_NONE = 0,
-    CM_NEW_GAME,
     CM_PLAYING,
     CM_GET_READY,
     CM_COUNT,
@@ -330,106 +330,23 @@ static inline b32 BirdCollidesWithCurrentPipe(GameState *game_state)
     return result;
 }
 
-global i32 current_score = 0;
-global b32 can_score = true;
-
-static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer, 
-                                GameState *game_state) 
+static inline void DrawBackground(GameScreenBuffer *game_screen_buffer)
 {
-#if FLAPPY_DEBUG
-    static u32 debug_frame_counter = 0;
-#endif
-
-    if(game_state->current_mode == CM_NEW_GAME) {
-        game_state->bird.velocity = 0;
-        game_state->bird.y = game_screen_buffer->playable_height / 2;
-        game_state->bird.x = (PercentOf(28.67, game_screen_buffer->width) 
-                              - (game_state->bird.width / 2));
-
-        current_score = 0;
-        can_score = true;
-
-        pipes[0] = (PipePair){0, 550};
-        pipes[1] = (PipePair){0, 550};
-        pipes[2] = (PipePair){0, 550};
-
-        pipe_queue.pipes[0] = &pipes[0];
-        pipe_queue.pipes[1] = &pipes[1];
-        pipe_queue.pipes[2] = &pipes[2];
-        pipe_queue.count = 3;
-
-
-        oldest_pipe  = NULL;
-        current_pipe = NULL;
-        newest_pipe  = GetAvailablePipe(game_screen_buffer, game_state);
-
-        game_state->jump_key_pressed = 0;
-        game_state->current_mode = CM_PLAYING;
-    }
-    
     for(i32 i = 0; 
         i < game_screen_buffer->width * game_screen_buffer->actual_height; 
         i++) {
         ((u32 *)game_screen_buffer->memory)[i] = COLOR_BLACK;
     }
 
-    if ((newest_pipe->x + game_state->pipe_width / 2) 
-         <= game_screen_buffer->width / 2) {
-        oldest_pipe = current_pipe;
+}
 
-        current_pipe = newest_pipe;
-        can_score = 1;
+global i32 current_score = 0;
+global b32 can_score = true;
 
-        newest_pipe = GetAvailablePipe(game_screen_buffer, game_state);
-    }
-
-    if(game_state->bird.y + game_state->bird.height >= game_screen_buffer->playable_height ||
-       BirdCollidesWithCurrentPipe(game_state)) {
-        game_state->current_mode = CM_NEW_GAME;
-        return;
-    }
-
-    if(oldest_pipe) {
-        if (oldest_pipe->x + game_state->pipe_width <= 0) {
-            AddAvailablePipe(oldest_pipe);
-        }
-
-        DrawPipePair(game_state, oldest_pipe, game_screen_buffer);
-        oldest_pipe->x -= GetPipeMovementSpeed(game_screen_buffer->width) * game_state->delta_time_ms;
-    }
-
-    if(newest_pipe) {
-        DrawPipePair(game_state, newest_pipe, game_screen_buffer);
-        newest_pipe->x -= GetPipeMovementSpeed(game_screen_buffer->width) * game_state->delta_time_ms;
-    }
-
-    if(current_pipe) {
-        if(game_state->bird.x > current_pipe->x && can_score) {
-            current_score++;
-            can_score = 0;
-            PlatformDebugPrint("score: %d", current_score);
-        }
-
-        DrawPipePair(game_state, current_pipe, game_screen_buffer);
-        current_pipe->x -= GetPipeMovementSpeed(game_screen_buffer->width) * game_state->delta_time_ms;
-    }
-
-    // NOTE: DrawGround
-    {
-        u32 color = COLOR_WHITE;
-        i32 start_y = game_screen_buffer->playable_height;
-        i32 end_y = game_screen_buffer->actual_height;
-
-        DrawRectangle(game_screen_buffer,
-                      0, start_y,
-                      game_screen_buffer->width, end_y,
-                      color);
-    }
-
-    DrawBird(game_state, game_screen_buffer);
-
+static void MoveBird(GameScreenBuffer *game_screen_buffer,
+                     GameState *game_state)
+{
     /* TODO: Figure out how to get these speeds just right */
-
     if(game_state->jump_key_pressed) {
         game_state->bird.velocity = -(game_screen_buffer->playable_height * 0.6f);
         game_state->jump_key_pressed = false;
@@ -453,6 +370,126 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
     if(game_state->bird.velocity > max_fall) {
         game_state->bird.velocity = max_fall;
     }
+}
+
+/* TODO: change stupid name */
+static void PlayGame(GameScreenBuffer *game_screen_buffer,
+                     GameState *game_state,
+                     b32 new_game)
+{
+    if(new_game) {
+        current_score = 0;
+        can_score = true;
+
+        pipes[0] = (PipePair){0, 550};
+        pipes[1] = (PipePair){0, 550};
+        pipes[2] = (PipePair){0, 550};
+
+        pipe_queue.pipes[0] = &pipes[0];
+        pipe_queue.pipes[1] = &pipes[1];
+        pipe_queue.pipes[2] = &pipes[2];
+        pipe_queue.count = 3;
+
+
+        oldest_pipe  = NULL;
+        current_pipe = NULL;
+        newest_pipe  = GetAvailablePipe(game_screen_buffer, game_state);
+
+        game_state->jump_key_pressed = false;
+        game_state->current_mode = CM_PLAYING;
+    }
+
+    if(game_state->bird.y + game_state->bird.height >= game_screen_buffer->playable_height ||
+       BirdCollidesWithCurrentPipe(game_state)) {
+        game_state->current_mode = CM_GET_READY;
+        return;
+    }
+    
+    if ((newest_pipe->x + game_state->pipe_width / 2) 
+         <= game_screen_buffer->width / 2) {
+        oldest_pipe = current_pipe;
+
+        current_pipe = newest_pipe;
+        can_score = true;
+
+        newest_pipe = GetAvailablePipe(game_screen_buffer, game_state);
+    }
+
+    if(oldest_pipe) {
+        if (oldest_pipe->x + game_state->pipe_width <= 0) {
+            AddAvailablePipe(oldest_pipe);
+        }
+
+        DrawPipePair(game_state, oldest_pipe, game_screen_buffer);
+        oldest_pipe->x -= GetPipeMovementSpeed(game_screen_buffer->width) * game_state->delta_time_ms;
+    }
+
+    if(newest_pipe) {
+        DrawPipePair(game_state, newest_pipe, game_screen_buffer);
+        newest_pipe->x -= GetPipeMovementSpeed(game_screen_buffer->width) * game_state->delta_time_ms;
+    }
+
+    if(current_pipe) {
+        if(game_state->bird.x > current_pipe->x && can_score) {
+            current_score++;
+            can_score = false;
+            PlatformDebugPrint("score: %d", current_score);
+        }
+
+        DrawPipePair(game_state, current_pipe, game_screen_buffer);
+        current_pipe->x -= GetPipeMovementSpeed(game_screen_buffer->width) * game_state->delta_time_ms;
+    }
+
+    MoveBird(game_screen_buffer, game_state);
+}
+
+static inline void ResetBird(GameScreenBuffer *game_screen_buffer,
+                             GameState *game_state)
+{
+    game_state->bird.velocity = 0;
+    game_state->bird.y = game_screen_buffer->playable_height / 2;
+    game_state->bird.x = (PercentOf(28.67, game_screen_buffer->width) 
+                          - (game_state->bird.width / 2));
+}
+
+static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer, 
+                                GameState *game_state) 
+{
+#if FLAPPY_DEBUG
+    static u32 debug_frame_counter = 0;
+#endif
+    DrawBackground(game_screen_buffer);
+
+    
+    b32 new_game = false;
+    if(game_state->current_mode == CM_GET_READY) {
+        ResetBird(game_screen_buffer, game_state);
+        if(game_state->jump_key_pressed) {
+            MoveBird(game_screen_buffer, game_state);
+            game_state->current_mode = CM_PLAYING;
+            new_game = true;
+        }
+    }
+
+
+    if(game_state->current_mode == CM_PLAYING) {
+        PlayGame(game_screen_buffer, game_state, new_game);
+    }
+
+
+    // NOTE: DrawGround
+    {
+        u32 color = COLOR_WHITE;
+        i32 start_y = game_screen_buffer->playable_height;
+        i32 end_y = game_screen_buffer->actual_height;
+
+        DrawRectangle(game_screen_buffer,
+                      0, start_y,
+                      game_screen_buffer->width, end_y,
+                      color);
+    }
+
+    DrawBird(game_state, game_screen_buffer);
    
 
 #if FLAPPY_DEBUG
@@ -571,8 +608,7 @@ static GameSetupResult GameSetup(void *main_window_buffer, void *usable_memory, 
         .length = StringLength(game_base_path)
     };
 
-    // XXX: here XXX
-    result.game_state.current_mode = CM_NEW_GAME;
+    result.game_state.current_mode = CM_GET_READY;
     result.game_state.delta_time_ms = 0;
     result.game_state.asset_file_arena = asset_file_arena;
     result.game_state.temp_arena = temp_arena;

@@ -155,7 +155,7 @@ int main(int argc, char *argv[]) {
                     }
 
                     if(event.key.key == SDLK_R) {
-                        game_state.current_mode = CM_NEW_GAME;
+                        game_state.current_mode = CM_GET_READY;
                         break;
                     }
 
