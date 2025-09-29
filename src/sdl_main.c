@@ -51,6 +51,7 @@ static LoadedFile PlatformLoadEntireFile(char *file_path, Arena *arena)
     return result;
 }
 
+/* TODO: The game crashes when moving window between monitors */
 int main(int argc, char *argv[]) {
     (void)argc; (void)argv;
 

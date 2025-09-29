@@ -1,3 +1,8 @@
+#define COLOR_BLACK 0x0F1B26FF
+#define COLOR_WHITE 0xF5E8D1FF
+#define COLOR_BLUE  0x20A5A6FF
+#define COLOR_RED   0xDD5639FF
+
 typedef enum {
     GDF_ALWAYS_SCORE     = (1 << 0), // Shortcut: 1
     GDF_PRIMITIVE_RENDER = (1 << 1), // Shortcut: 2
@@ -251,7 +256,7 @@ static inline PipePair *GetAvailablePipe(GameScreenBuffer *screen_buffer,
 
 #if FLAPPY_DEBUG
         if(game_state->game_debug_flags & GDF_ALWAYS_SCORE) {
-            result->bottom_pipe_y = 700;
+            result->bottom_pipe_y = (screen_buffer->playable_height / 2) + (game_state->y_between_pipes / 2);
         }
 #endif
 
@@ -267,7 +272,7 @@ static inline PipePair *GetAvailablePipe(GameScreenBuffer *screen_buffer,
 
 global PipePair pipes[3];
 
-#define GetPipeMovementSpeed(window_width) (0.0004340277778 * window_width)
+#define GetPipeMovementSpeed(window_width) (0.0004340277778 * window_width / 2)
 
 typedef struct {
     i32 y;
@@ -282,7 +287,7 @@ global Bird bird;
 static void DrawBird(GameScreenBuffer *game_screen_buffer) 
 {
 
-    u32 bird_color  = 0xFF9500FF; 
+    u32 bird_color  = COLOR_RED; 
 
     DrawRectangle(game_screen_buffer, bird.x, bird.y, 
                   bird.x + bird.width, bird.y + bird.height,
@@ -358,7 +363,7 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
     for(i32 i = 0; 
         i < game_screen_buffer->width * game_screen_buffer->actual_height; 
         i++) {
-        ((u32 *)game_screen_buffer->memory)[i] = 0xFFFF00FF;
+        ((u32 *)game_screen_buffer->memory)[i] = COLOR_BLACK;
     }
 
     if ((newest_pipe->x + game_state->pipe_width / 2) 
@@ -404,7 +409,7 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
 
     // NOTE: DrawGround
     {
-        u32 color = 0xCC00FFFF;
+        u32 color = COLOR_WHITE;
         i32 start_y = game_screen_buffer->playable_height;
         i32 end_y = game_screen_buffer->actual_height;
 
@@ -463,7 +468,10 @@ typedef struct __attribute__((packed)) {
 } BitmapFormatHeader;
 
 /* TODO: move to asset_loader_file? */
-/* NOTE: this only loads BMPs created with aesprite, not generic */
+/* NOTE: this only loads BMPs created with aesprite, not generic
+ *       that have been exported after a flatten
+ *                 
+ * */
 static BitmapAsset LoadBitmapAsset(GameState *game_state,
                                    String asset_file_name)
 {
@@ -526,7 +534,7 @@ static BitmapAsset LoadBitmapAsset(GameState *game_state,
 static inline void LoadAllAssets(GameState *game_state)
 {
     game_state->pipe_bitmap = 
-        LoadBitmapAsset(game_state, S("pipe_1.bmp"));
+        LoadBitmapAsset(game_state, S("pipe_2.bmp"));
 
     game_state->test_bitmap = 
         LoadBitmapAsset(game_state, S("test_bitmap.bmp"));
