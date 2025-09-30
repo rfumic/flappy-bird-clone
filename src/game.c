@@ -55,6 +55,7 @@ typedef struct {
     i32 y_between_pipes;
 
     BitmapAsset pipe_bitmap;
+    BitmapAsset digits_font_bitmap;
     BitmapAsset test_bitmap;
 } GameState;
 
@@ -489,6 +490,8 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
                       color);
     }
 
+    DrawBitmap(&game_state->digits_font_bitmap, game_screen_buffer, 
+            150, 150);
     DrawBird(game_state, game_screen_buffer);
    
 
@@ -514,9 +517,14 @@ typedef struct __attribute__((packed)) {
 /* TODO: move to asset_loader_file? */
 /* NOTE: this only loads BMPs created with aesprite, not generic
  *       that have been exported after a flatten
+ *
+ * NOTE: if replacement color is 0, uses original
+ *       else replaces all pixels that have alpha FF
  */
 static BitmapAsset LoadBitmapAsset(GameState *game_state,
-                                   String asset_file_name)
+                                   String asset_file_name,
+                                   u32 scale_factor,
+                                   u32 replacement_color)
 {
     BitmapAsset result = {0};
 
@@ -543,7 +551,7 @@ static BitmapAsset LoadBitmapAsset(GameState *game_state,
     }
 
     LoadedFile bitmap_file = 
-        PlatformLoadEntireFile((char *)full_file_path, &game_state->asset_file_arena);
+        PlatformLoadEntireFile((char *)full_file_path, &game_state->temp_arena);
 
     if(bitmap_file.size != 0) {
         BitmapFormatHeader *header = 
@@ -566,9 +574,35 @@ static BitmapAsset LoadBitmapAsset(GameState *game_state,
             }
         }
 
-        result.memory = pixels;
-        result.width = header->width;
-        result.height = header->height;
+        // scaling
+        i32 new_width = header->width * scale_factor;
+        i32 new_height = header->height * scale_factor;
+        u32 scaled_bitmap_size = new_height * new_width;
+        u32 *scaled_pixels = ArenaAllocArray(&game_state->asset_file_arena, u32, 
+                                             scaled_bitmap_size); 
+        
+        for(i32 row = 0; row < new_height;  row++) {
+            u32 original_row = (u32)(row / scale_factor);
+            u32 original_row_start_idx = original_row * header->width;
+            u32 scaled_row_start_idx = row * new_width;
+
+            for(i32 col = 0; col < new_width;  col++) {
+                u32 original_col = (u32)(col / scale_factor);
+                u32 original_idx = original_row_start_idx + original_col;
+
+                u32 pixel = pixels[original_idx];
+
+                if(replacement_color > 0 && pixel & 0x000000FF) {
+                    pixel = replacement_color;
+                }
+                scaled_pixels[scaled_row_start_idx + col] = pixel;
+            }
+        }
+
+
+        result.memory = scaled_pixels;
+        result.width = new_width;
+        result.height = new_height;
     }
 
     return result;
@@ -577,10 +611,13 @@ static BitmapAsset LoadBitmapAsset(GameState *game_state,
 static inline void LoadAllAssets(GameState *game_state)
 {
     game_state->pipe_bitmap = 
-        LoadBitmapAsset(game_state, S("pipe_2.bmp"));
+        LoadBitmapAsset(game_state, S("pipe_2.bmp"), 1, 0);
+
+    game_state->digits_font_bitmap = 
+        LoadBitmapAsset(game_state, S("digits_font.bmp"), 3, COLOR_RED);
 
     game_state->test_bitmap = 
-        LoadBitmapAsset(game_state, S("test_bitmap.bmp"));
+        LoadBitmapAsset(game_state, S("test_bitmap.bmp"), 1, 0);
 }
 
 typedef struct {
