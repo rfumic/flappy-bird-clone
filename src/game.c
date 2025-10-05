@@ -37,6 +37,7 @@ typedef struct {
     i32 height;
     i32 width;
     f32 velocity;
+    b32 is_falling;
 } Bird;
 
 typedef enum {
@@ -68,8 +69,18 @@ typedef struct {
 
     BitmapAsset pipe_bitmap;
     BitmapAsset digits_font_bitmap;
+    BitmapAsset boomislav_bitmap;
     BitmapAsset test_bitmap;
 } GameState;
+
+static inline b32 IsBitmapAvailable(BitmapAsset bitmap)
+{
+    b32 result = bitmap.memory != NULL && 
+                 bitmap.width > 0 && 
+                 bitmap.height > 0;
+
+    return result;
+}
 
 static void DrawRectangle(GameScreenBuffer *buffer, i32 min_x, i32 min_y, 
                           i32 max_x, i32 max_y, u32 color) 
@@ -212,11 +223,8 @@ static inline void DrawDigit(u32 digit, GameState *game_state,
 static inline void DrawPipePair(GameState *game_state, PipePair *pipe_pair, 
                                 GameScreenBuffer *buffer)
 {
-    b32 bitmap_available = game_state->pipe_bitmap.memory != NULL && 
-                           game_state->pipe_bitmap.width > 0 && 
-                           game_state->pipe_bitmap.height > 0;
-
-    if(!(game_state->game_debug_flags & GDF_PRIMITIVE_RENDER) && bitmap_available) {
+    if(!(game_state->game_debug_flags & GDF_PRIMITIVE_RENDER) && 
+       IsBitmapAvailable(game_state->pipe_bitmap)) {
         BitmapAsset bitmap = game_state->pipe_bitmap;
 
         // draw top pipe
@@ -334,10 +342,26 @@ static void DrawBird(GameState *game_state, GameScreenBuffer *game_screen_buffer
 {
     u32 bird_color  = COLOR_WHITE; 
     Bird bird = game_state->bird;
+    b32 is_falling = bird.is_falling == true ? 1 : 0;
+    BitmapAsset bird_bitmap = game_state->boomislav_bitmap;
 
-    DrawRectangle(game_screen_buffer, bird.x, bird.y, 
-                  bird.x + bird.width, bird.y + bird.height,
-                  bird_color);
+    if((game_state->game_debug_flags & GDF_PRIMITIVE_RENDER) ||
+        !IsBitmapAvailable(bird_bitmap)) {
+
+        DrawRectangle(game_screen_buffer, bird.x, bird.y, 
+                bird.x + bird.width, bird.y + bird.height,
+                bird_color);
+
+    } else {
+
+        u32 scale = bird_bitmap.scale_factor;
+        i32 x_offset = is_falling * (bird.width) * scale;
+
+        DrawBitmapEx(&bird_bitmap, game_screen_buffer,
+                     bird.x, bird.y, x_offset, 0,
+                     bird.width * scale,
+                     bird.height * scale);
+    }
 }
 
 static inline b32 BirdCollidesWithCurrentPipe(GameState *game_state)
@@ -394,7 +418,10 @@ static void MoveBird(GameScreenBuffer *game_screen_buffer,
     game_state->bird.velocity += (game_screen_buffer->playable_height 
                                   * 0.002f * 30.0f * 30.0f) 
                                   * delta_time;
-    game_state->bird.y += game_state->bird.velocity * delta_time;
+
+    i32 delta = game_state->bird.velocity * delta_time;
+    game_state->bird.y += delta;
+    game_state->bird.is_falling = delta >= 0;
 
 #if FLAPPY_DEBUG
     if(game_state->game_debug_flags & GDF_ALWAYS_SCORE) {
@@ -503,6 +530,7 @@ static void PlayGame(GameScreenBuffer *game_screen_buffer,
         }
 
         DrawPipePair(game_state, oldest_pipe, game_screen_buffer);
+        /* TODO: pipe movement still not FPS independent */
         oldest_pipe->x -= GetPipeMovementSpeed(game_screen_buffer->width) * game_state->delta_time_ms;
     }
 
@@ -574,9 +602,14 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
 
 #if FLAPPY_DEBUG
     if(game_state->game_debug_flags & GDF_SHOW_FPS) {
+        DrawRectangle(game_screen_buffer,
+                0, game_screen_buffer->playable_height - 40,
+                75, game_screen_buffer->playable_height,
+                COLOR_BLUE);
         DrawNumber(game_state->current_fps, 
                    20, game_screen_buffer->playable_height - 30, 
                    game_state, game_screen_buffer);
+
     }
 
     (void)debug_frame_counter;
@@ -697,6 +730,9 @@ static inline void LoadAllAssets(GameState *game_state)
     game_state->pipe_bitmap = 
         LoadBitmapAsset(game_state, S("pipe_2.bmp"), 1, 0);
 
+    game_state->boomislav_bitmap = 
+        LoadBitmapAsset(game_state, S("boomislav.bmp"), 1, COLOR_WHITE);
+
     game_state->digits_font_bitmap = 
         LoadBitmapAsset(game_state, S("digits_font.bmp"), 3, COLOR_RED);
 
@@ -738,8 +774,11 @@ static GameSetupResult GameSetup(void *main_window_buffer, void *usable_memory, 
     result.game_state.y_between_pipes = PercentOf(30, result.game_screen_buffer.playable_height);
     result.game_state.pipe_width = PercentOf(17, result.game_screen_buffer.width);
 
-    result.game_state.bird.width = PercentOf(11, result.game_screen_buffer.width);
-    result.game_state.bird.height = PercentOf(7, result.game_screen_buffer.playable_height);
+    /* result.game_state.bird.width = PercentOf(11, result.game_screen_buffer.width); */
+    result.game_state.bird.width = 40;
+    /* result.game_state.bird.height = PercentOf(7, result.game_screen_buffer.playable_height); */
+    result.game_state.bird.height = 40;
+
     result.game_state.bird.y = result.game_screen_buffer.playable_height / 2;
     result.game_state.bird.x = (PercentOf(28.67, result.game_screen_buffer.width) 
                                 - (result.game_state.bird.width / 2));

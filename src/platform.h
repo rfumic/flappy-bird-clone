@@ -16,4 +16,16 @@ static inline f32 PlatformSineF32(f32 x);
 #define ASSET_ARENA_SIZE     MB(4)
 #define TEMPORARY_ARENA_SIZE MB(1)
 
+/* TODO: think about this
+     consider going to even lower resolution, because
+     i want to target browsers
+*/
+
+/*  game itself is 9:16, but should i put some bars on left and right? */
+/* #define WINDOW_HEIGHT 1024 */
+#define WINDOW_HEIGHT 640
+/* #define WINDOW_HEIGHT (1024/2) */
+#define WINDOW_WIDTH 360
+/* #define WINDOW_WIDTH (576/2) */
+
 #endif /* PLATFORM_H_ */

@@ -96,14 +96,3 @@ static inline size StringLength(u8 *input)
     return input - start - 1;
 }
 
-/* TODO: think about this
-     consider going to even lower resolution, because
-     i want to target browsers
-*/
-
-/*  game itself is 9:16, but should i put some bars on left and right? */
-/* #define WINDOW_HEIGHT 1024 */
-#define WINDOW_HEIGHT 640
-/* #define WINDOW_HEIGHT (1024/2) */
-#define WINDOW_WIDTH 360
-/* #define WINDOW_WIDTH (576/2) */
