@@ -114,10 +114,20 @@ int main(int argc, char *argv[]) {
     u64 current_tick = SDL_GetTicks();
     u64 last_tick;
 
+    u32 start_time = 0;
+    u32 frame_count = 0;
+
     b32 game_running = true;
     while(game_running) {
         last_tick = current_tick;
         current_tick = SDL_GetTicks();
+
+        if(current_tick - start_time >= 1000) {
+            game_state.current_fps = (u32) frame_count / ((current_tick - start_time) / 1000.0f);
+            start_time = current_tick;
+            frame_count = 0;
+        }
+
 
         game_state.delta_time_ms = current_tick - last_tick;
 
@@ -142,6 +152,11 @@ int main(int argc, char *argv[]) {
 
                     if(event.key.key == SDLK_2) {
                         game_state.game_debug_flags ^= GDF_PRIMITIVE_RENDER;
+                        break;
+                    }
+
+                    if(event.key.key == SDLK_3) {
+                        game_state.game_debug_flags ^= GDF_SHOW_FPS;
                         break;
                     }
 
@@ -181,6 +196,7 @@ int main(int argc, char *argv[]) {
         SDL_RenderTexture(renderer, texture, 0, 0);
         SDL_RenderPresent(renderer);
 
+        frame_count++;
 #if PLATFORM_USE_VSYNC != 1
         SDL_Delay(16);
         /* SDL_Delay(32); */

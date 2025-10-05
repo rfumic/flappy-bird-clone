@@ -11,6 +11,7 @@
 typedef enum {
     GDF_ALWAYS_SCORE     = (1 << 0), // Shortcut: 1
     GDF_PRIMITIVE_RENDER = (1 << 1), // Shortcut: 2
+    GDF_SHOW_FPS         = (1 << 2), // Shortcut: 3
 } GameDebugFlags;
 
 /* TODO: why isn't this in GameState? */
@@ -51,11 +52,14 @@ typedef struct {
     Arena temp_arena;
     String executable_base_path;
     GameDebugFlags game_debug_flags;
+    u32 current_fps;
 
     b32 jump_key_pressed;
     b32 debug_score_increment_pressed;
     CurrentMode current_mode;
     u64 delta_time_ms;
+    i32 current_score;
+    b32 can_score;
     
 
     Bird bird;
@@ -144,7 +148,6 @@ static inline void DrawBitmapEx(BitmapAsset *bitmap, GameScreenBuffer *buffer,
     u32 *dest = (u32 *)buffer->memory;
 
     i32 src_w = bitmap->width;
-    /* i32 src_h = bitmap->height; */
 
     i32 start_x = 0;
     i32 start_y = 0;
@@ -376,9 +379,6 @@ static inline void DrawBackground(GameScreenBuffer *game_screen_buffer)
 
 }
 
-global i32 current_score = 0;
-global b32 can_score = true;
-
 static void MoveBird(GameScreenBuffer *game_screen_buffer,
                      GameState *game_state)
 {
@@ -408,26 +408,25 @@ static void MoveBird(GameScreenBuffer *game_screen_buffer,
     }
 }
 
-static inline void DrawScore(u32 score, GameState *game_state, 
+static inline void DrawNumber(u32 number, i32 x, i32 y,
+                             GameState *game_state, 
                              GameScreenBuffer *game_screen_buffer)
 {
-    // NOTE: i guess this breaks if someone scores over 999
-    u32 *digits = ArenaAllocArray(&game_state->temp_arena, u32, 3);
+    /* NOTE: max is 9999 */
+    u32 *digits = ArenaAllocArray(&game_state->temp_arena, u32, 4);
 
     u32 num_of_digits = 0;
-    if(score == 0) {
+    if(number == 0) {
         digits[num_of_digits++] = 0;
     } else {
-        while(score)
+        while(number)
         {
-            digits[num_of_digits++] = score % 10;
-            score /= 10;
+            digits[num_of_digits++] = number % 10;
+            number /= 10;
         }
     }
 
 
-    i32 x = game_screen_buffer->width / 2;
-    i32 y = PercentOf(game_screen_buffer->playable_height, 10);
     i32 scale_factor = game_state->digits_font_bitmap.scale_factor;
     i32 digit_width = (FONT_DIGIT_WIDTH * scale_factor);
     i32 total_width = num_of_digits * digit_width;
@@ -438,6 +437,14 @@ static inline void DrawScore(u32 score, GameState *game_state,
         DrawDigit(digit, game_state, game_screen_buffer,
                 start_x + j * digit_width, y);
     }
+
+}
+static inline void DrawScore(u32 score, GameState *game_state, 
+                             GameScreenBuffer *game_screen_buffer)
+{
+    i32 x = game_screen_buffer->width / 2;
+    i32 y = PercentOf(game_screen_buffer->playable_height, 10);
+    DrawNumber(score, x, y, game_state, game_screen_buffer);
 }
 
 /* TODO: change stupid name */
@@ -446,8 +453,8 @@ static void PlayGame(GameScreenBuffer *game_screen_buffer,
                      b32 new_game)
 {
     if(new_game) {
-        current_score = 0;
-        can_score = true;
+        game_state->current_score = 0;
+        game_state->can_score = true;
 
         pipes[0] = (PipePair){0, 550};
         pipes[1] = (PipePair){0, 550};
@@ -469,7 +476,7 @@ static void PlayGame(GameScreenBuffer *game_screen_buffer,
 
 #if FLAPPY_DEBUG
     if(game_state->debug_score_increment_pressed) {
-        current_score++;
+        game_state->current_score++;
         game_state->debug_score_increment_pressed = false;
     }
 #endif
@@ -485,7 +492,7 @@ static void PlayGame(GameScreenBuffer *game_screen_buffer,
         oldest_pipe = current_pipe;
 
         current_pipe = newest_pipe;
-        can_score = true;
+        game_state->can_score = true;
 
         newest_pipe = GetAvailablePipe(game_screen_buffer, game_state);
     }
@@ -505,9 +512,9 @@ static void PlayGame(GameScreenBuffer *game_screen_buffer,
     }
 
     if(current_pipe) {
-        if(game_state->bird.x > current_pipe->x && can_score) {
-            current_score++;
-            can_score = false;
+        if(game_state->bird.x > current_pipe->x && game_state->can_score) {
+            game_state->current_score++;
+            game_state->can_score = false;
         }
 
         DrawPipePair(game_state, current_pipe, game_screen_buffer);
@@ -515,7 +522,7 @@ static void PlayGame(GameScreenBuffer *game_screen_buffer,
     }
 
     MoveBird(game_screen_buffer, game_state);
-    DrawScore(current_score, game_state, game_screen_buffer);
+    DrawScore(game_state->current_score, game_state, game_screen_buffer);
 }
 
 static inline void ResetBird(GameScreenBuffer *game_screen_buffer,
@@ -534,7 +541,6 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
     static u32 debug_frame_counter = 0;
 #endif
     DrawBackground(game_screen_buffer);
-
     
     b32 new_game = false;
     if(game_state->current_mode == CM_GET_READY) {
@@ -565,9 +571,14 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
     }
 
     DrawBird(game_state, game_screen_buffer);
-   
 
 #if FLAPPY_DEBUG
+    if(game_state->game_debug_flags & GDF_SHOW_FPS) {
+        DrawNumber(game_state->current_fps, 
+                   20, game_screen_buffer->playable_height - 30, 
+                   game_state, game_screen_buffer);
+    }
+
     (void)debug_frame_counter;
     debug_frame_counter++;
 #endif
@@ -718,6 +729,7 @@ static GameSetupResult GameSetup(void *main_window_buffer, void *usable_memory, 
         .length = StringLength(game_base_path)
     };
 
+    result.game_state.can_score = true;
     result.game_state.current_mode = CM_GET_READY;
     result.game_state.delta_time_ms = 0;
     result.game_state.asset_file_arena = asset_file_arena;
@@ -732,6 +744,7 @@ static GameSetupResult GameSetup(void *main_window_buffer, void *usable_memory, 
     result.game_state.bird.x = (PercentOf(28.67, result.game_screen_buffer.width) 
                                 - (result.game_state.bird.width / 2));
     result.game_state.bird.velocity = 0;
+
 
     LoadAllAssets(&result.game_state);
 
