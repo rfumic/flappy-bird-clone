@@ -3,6 +3,11 @@
 #define COLOR_BLUE  0x20A5A6FF
 #define COLOR_RED   0xDD5639FF
 
+/* NOTE: 5x7 is assumed for each digit in font */
+/* TODO: should this be dynamic? */
+#define FONT_DIGIT_WIDTH  5
+#define FONT_DIGIT_HEIGHT 7
+
 typedef enum {
     GDF_ALWAYS_SCORE     = (1 << 0), // Shortcut: 1
     GDF_PRIMITIVE_RENDER = (1 << 1), // Shortcut: 2
@@ -48,8 +53,10 @@ typedef struct {
     GameDebugFlags game_debug_flags;
 
     b32 jump_key_pressed;
+    b32 debug_score_increment_pressed;
     CurrentMode current_mode;
     u64 delta_time_ms;
+    
 
     Bird bird;
     i32 pipe_width;
@@ -190,16 +197,13 @@ static inline void DrawDigit(u32 digit, GameState *game_state,
     Assert(digit >= 0 && digit < 10);
 
     const u32 scale_factor = game_state->digits_font_bitmap.scale_factor;
-    /* NOTE: 5x7 is assumed for each digit in font */
-    /* TODO: should this be dynamic? */
-    const i32 digit_width = 5 * scale_factor;
-    const i32 digit_height = 7 * scale_factor;
 
-    // x_offset = digit_index × (digit_width + padding) × scale_factor
-    i32 x_offset = digit * 6 * scale_factor;
+    i32 x_offset = digit * (FONT_DIGIT_WIDTH + 1) * scale_factor;
 
     DrawBitmapEx(&game_state->digits_font_bitmap, game_screen_buffer, 
-                 start_x, start_y, x_offset, 0, digit_width, digit_height);
+                 start_x, start_y, x_offset, 0, 
+                 FONT_DIGIT_WIDTH * scale_factor, 
+                 FONT_DIGIT_HEIGHT * scale_factor);
 }
 
 static inline void DrawPipePair(GameState *game_state, PipePair *pipe_pair, 
@@ -404,6 +408,38 @@ static void MoveBird(GameScreenBuffer *game_screen_buffer,
     }
 }
 
+static inline void DrawScore(u32 score, GameState *game_state, 
+                             GameScreenBuffer *game_screen_buffer)
+{
+    // NOTE: i guess this breaks if someone scores over 999
+    u32 *digits = ArenaAllocArray(&game_state->temp_arena, u32, 3);
+
+    u32 num_of_digits = 0;
+    if(score == 0) {
+        digits[num_of_digits++] = 0;
+    } else {
+        while(score)
+        {
+            digits[num_of_digits++] = score % 10;
+            score /= 10;
+        }
+    }
+
+
+    i32 x = game_screen_buffer->width / 2;
+    i32 y = PercentOf(game_screen_buffer->playable_height, 10);
+    i32 scale_factor = game_state->digits_font_bitmap.scale_factor;
+    i32 digit_width = (FONT_DIGIT_WIDTH * scale_factor);
+    i32 total_width = num_of_digits * digit_width;
+    i32 start_x = x - total_width / 2;
+
+    for(i32 i = num_of_digits - 1, j = 0; i >= 0; i--, j++) {
+        u32 digit = digits[i];
+        DrawDigit(digit, game_state, game_screen_buffer,
+                start_x + j * digit_width, y);
+    }
+}
+
 /* TODO: change stupid name */
 static void PlayGame(GameScreenBuffer *game_screen_buffer,
                      GameState *game_state,
@@ -431,6 +467,13 @@ static void PlayGame(GameScreenBuffer *game_screen_buffer,
         game_state->current_mode = CM_PLAYING;
     }
 
+#if FLAPPY_DEBUG
+    if(game_state->debug_score_increment_pressed) {
+        current_score++;
+        game_state->debug_score_increment_pressed = false;
+    }
+#endif
+    
     if(game_state->bird.y + game_state->bird.height >= game_screen_buffer->playable_height ||
        BirdCollidesWithCurrentPipe(game_state)) {
         game_state->current_mode = CM_GET_READY;
@@ -465,7 +508,6 @@ static void PlayGame(GameScreenBuffer *game_screen_buffer,
         if(game_state->bird.x > current_pipe->x && can_score) {
             current_score++;
             can_score = false;
-            PlatformDebugPrint("score: %d", current_score);
         }
 
         DrawPipePair(game_state, current_pipe, game_screen_buffer);
@@ -473,6 +515,7 @@ static void PlayGame(GameScreenBuffer *game_screen_buffer,
     }
 
     MoveBird(game_screen_buffer, game_state);
+    DrawScore(current_score, game_state, game_screen_buffer);
 }
 
 static inline void ResetBird(GameScreenBuffer *game_screen_buffer,
@@ -521,10 +564,6 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
                       color);
     }
 
-    /* XXX */
-    DrawDigit(7, game_state, game_screen_buffer, 150, 150);
-    /* DrawBitmap(&game_state->digits_font_bitmap, game_screen_buffer,  */
-    /*         150, 150); */
     DrawBird(game_state, game_screen_buffer);
    
 
@@ -648,7 +687,7 @@ static inline void LoadAllAssets(GameState *game_state)
         LoadBitmapAsset(game_state, S("pipe_2.bmp"), 1, 0);
 
     game_state->digits_font_bitmap = 
-        LoadBitmapAsset(game_state, S("digits_font.bmp"), 2, COLOR_RED);
+        LoadBitmapAsset(game_state, S("digits_font.bmp"), 3, COLOR_RED);
 
     game_state->test_bitmap = 
         LoadBitmapAsset(game_state, S("test_bitmap.bmp"), 1, 0);

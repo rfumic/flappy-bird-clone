@@ -144,6 +144,12 @@ int main(int argc, char *argv[]) {
                         game_state.game_debug_flags ^= GDF_PRIMITIVE_RENDER;
                         break;
                     }
+
+                    if(event.key.key == SDLK_K) {
+                        game_state.debug_score_increment_pressed = true;
+                        break;
+                    }
+
 #endif
 
                 }
