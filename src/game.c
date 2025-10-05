@@ -22,6 +22,7 @@ typedef struct {
     void *memory;
     i32  width;
     i32  height;
+    u32  scale_factor;
 } BitmapAsset;
 
 typedef struct {
@@ -127,19 +128,21 @@ static inline u32 ComputePixel(u32 src_pixel, u32 dest_pixel)
     return result;
 }
 
-static inline void DrawBitmap(BitmapAsset *bitmap, GameScreenBuffer *buffer, 
-                              i32 dest_x, i32 dest_y)
+static inline void DrawBitmapEx(BitmapAsset *bitmap, GameScreenBuffer *buffer, 
+                                i32 dest_x, i32 dest_y,
+                                i32 src_x, i32 src_y,
+                                i32 sprite_w, i32 sprite_h)
 {
     u32 *src = (u32 *)bitmap->memory;
     u32 *dest = (u32 *)buffer->memory;
 
     i32 src_w = bitmap->width;
-    i32 src_h = bitmap->height;
+    /* i32 src_h = bitmap->height; */
 
     i32 start_x = 0;
     i32 start_y = 0;
-    i32 end_x   = src_w;
-    i32 end_y   = src_h;
+    i32 end_x   = sprite_w;
+    i32 end_y   = sprite_h;
 
     if (dest_x < 0) {
         start_x = -dest_x;
@@ -161,7 +164,8 @@ static inline void DrawBitmap(BitmapAsset *bitmap, GameScreenBuffer *buffer,
 
     for (i32 y = start_y; y < end_y; y++) {
         for (i32 x = start_x; x < end_x; x++) {
-            u32 src_pixel = src[y * src_w + x];
+            u32 src_pixel = src[(src_y + y) * src_w + (src_x + x)];
+
             u32 *dest_pixel_ptr =
                 &dest[(dest_y + (y - start_y)) * buffer->width +
                 (dest_x + (x - start_x))];
@@ -169,6 +173,33 @@ static inline void DrawBitmap(BitmapAsset *bitmap, GameScreenBuffer *buffer,
             *dest_pixel_ptr = ComputePixel(src_pixel, *dest_pixel_ptr);
         }
     }
+}
+
+// NOTE: draws entire bitmap. DrawBitmapEx draws sections
+static inline void DrawBitmap(BitmapAsset *bitmap, GameScreenBuffer *buffer, 
+                              i32 dest_x, i32 dest_y)
+{
+    DrawBitmapEx(bitmap, buffer, dest_x, dest_y, 0, 0,
+                 bitmap->width, bitmap->height);
+}
+
+static inline void DrawDigit(u32 digit, GameState *game_state,
+                             GameScreenBuffer *game_screen_buffer,
+                             i32 start_x, i32 start_y)
+{
+    Assert(digit >= 0 && digit < 10);
+
+    const u32 scale_factor = game_state->digits_font_bitmap.scale_factor;
+    /* NOTE: 5x7 is assumed for each digit in font */
+    /* TODO: should this be dynamic? */
+    const i32 digit_width = 5 * scale_factor;
+    const i32 digit_height = 7 * scale_factor;
+
+    // x_offset = digit_index × (digit_width + padding) × scale_factor
+    i32 x_offset = digit * 6 * scale_factor;
+
+    DrawBitmapEx(&game_state->digits_font_bitmap, game_screen_buffer, 
+                 start_x, start_y, x_offset, 0, digit_width, digit_height);
 }
 
 static inline void DrawPipePair(GameState *game_state, PipePair *pipe_pair, 
@@ -490,8 +521,10 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
                       color);
     }
 
-    DrawBitmap(&game_state->digits_font_bitmap, game_screen_buffer, 
-            150, 150);
+    /* XXX */
+    DrawDigit(7, game_state, game_screen_buffer, 150, 150);
+    /* DrawBitmap(&game_state->digits_font_bitmap, game_screen_buffer,  */
+    /*         150, 150); */
     DrawBird(game_state, game_screen_buffer);
    
 
@@ -603,6 +636,7 @@ static BitmapAsset LoadBitmapAsset(GameState *game_state,
         result.memory = scaled_pixels;
         result.width = new_width;
         result.height = new_height;
+        result.scale_factor = scale_factor;
     }
 
     return result;
@@ -614,7 +648,7 @@ static inline void LoadAllAssets(GameState *game_state)
         LoadBitmapAsset(game_state, S("pipe_2.bmp"), 1, 0);
 
     game_state->digits_font_bitmap = 
-        LoadBitmapAsset(game_state, S("digits_font.bmp"), 3, COLOR_RED);
+        LoadBitmapAsset(game_state, S("digits_font.bmp"), 2, COLOR_RED);
 
     game_state->test_bitmap = 
         LoadBitmapAsset(game_state, S("test_bitmap.bmp"), 1, 0);
