@@ -94,7 +94,8 @@ int main(int argc, char *argv[]) {
     }
 
 
-    u8 *usable_memory = calloc(ASSET_ARENA_SIZE + TEMPORARY_ARENA_SIZE, sizeof(u8));
+    u32 total_memory_size = ASSET_ARENA_SIZE + TEMPORARY_ARENA_SIZE + GAME_ARENA_SIZE;
+    u8 *usable_memory = calloc(total_memory_size, sizeof(u8));
     if(usable_memory == NULL) {
         SDL_LogError(SDL_LOG_CATEGORY_ERROR, 
                      "Failed to allocate game memory\n");

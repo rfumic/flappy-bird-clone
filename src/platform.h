@@ -15,6 +15,7 @@ static inline f32 PlatformSineF32(f32 x);
 
 #define ASSET_ARENA_SIZE     MB(4)
 #define TEMPORARY_ARENA_SIZE MB(1)
+#define GAME_ARENA_SIZE      KB(1)
 
 /* TODO: think about this
      consider going to even lower resolution, because

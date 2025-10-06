@@ -1,3 +1,18 @@
+/* *
+ * TODO: 
+ *      - Correct flapping animation
+ *      - Animated ground
+ *      - Fix number rendering
+ *      - Sounds
+ *          - Jumping
+ *          - Score sound
+ *          - Mute sound option
+ *      - After death menu
+ *      - Pause menu
+ *      - Main menu
+ *      - Highscores menu
+ * */
+
 #define COLOR_BLACK 0x0F1B26FF
 #define COLOR_WHITE 0xF5E8D1FF
 #define COLOR_BLUE  0x20A5A6FF
@@ -40,6 +55,87 @@ typedef struct {
     b32 is_falling;
 } Bird;
 
+#define PARTICLE_WIDTH  5
+#define PARTICLE_HEIGHT 5
+#define PARTICLE_FADE_RATE 123.45f
+#define PARTICLE_MAX_AMOUNT 32
+typedef struct Particle {
+    i32 x;
+    i32 y;
+    // NOTE: 0-100.0f
+    f32 opacity;
+    u32 memory[PARTICLE_HEIGHT * PARTICLE_WIDTH];
+} Particle;
+
+typedef struct {
+    i32 data[PARTICLE_MAX_AMOUNT];
+    i32 top;
+} ParticleIndexStack;
+
+static inline i32 ParticleIndexStackPop(ParticleIndexStack *stack)
+{
+    i32 result;
+    if(stack->top < 0) {
+        result = -1;
+    } else {
+        result = stack->data[stack->top--];
+    }
+    return result;
+}
+
+static inline void ParticleIndexStackPush(ParticleIndexStack *stack, i32 value)
+{
+    if(stack->top == PARTICLE_MAX_AMOUNT - 1) {
+        return;
+    }
+    stack->data[++stack->top] = value;
+}
+
+
+typedef struct {
+    Particle particles[PARTICLE_MAX_AMOUNT];
+    ParticleIndexStack free_idxs;
+    b32 in_use_idxs[PARTICLE_MAX_AMOUNT];
+} ParticleClass;
+
+static inline void InitParticleClass(ParticleClass *particle_class)
+{
+    for(i32 i = 0; 
+        i < PARTICLE_MAX_AMOUNT; 
+        i++) {
+        particle_class->in_use_idxs[i] = false;
+        ParticleIndexStackPush(&particle_class->free_idxs, i);
+    }
+}
+
+static inline Particle *GetNewParticle(ParticleClass *particle_class,
+                                       i32 x, i32 y, f32 opacity)
+{
+        Particle *result = NULL;
+        i32 particle_idx = ParticleIndexStackPop(&particle_class->free_idxs);
+        Assert(particle_idx >= 0);
+        result = particle_class->particles + particle_idx;
+        result->x = x;
+        result->y = y;
+        result->opacity = opacity;
+
+        particle_class->in_use_idxs[particle_idx] = true;
+
+        /* PlatformDebugPrint("Getting particle, index: %d", particle_idx); */
+
+        return result;
+}
+
+static inline void ReleaseParticle(ParticleClass *particle_class,
+                                   i32 particle_idx)
+{
+
+    /* PlatformDebugPrint("Releasing particle, index: %d", particle_idx); */
+    ParticleIndexStackPush(&particle_class->free_idxs,
+                           particle_idx);
+    particle_class->in_use_idxs[particle_idx] = false;
+}
+
 typedef enum {
     CM_NONE = 0,
     CM_PLAYING,
@@ -50,18 +146,19 @@ typedef enum {
 // NOTE: this should get passed by pointer
 typedef struct {
     Arena asset_file_arena;
+    Arena game_arena;
     Arena temp_arena;
     String executable_base_path;
     GameDebugFlags game_debug_flags;
+    b32 debug_score_increment_pressed;
     u32 current_fps;
 
     b32 jump_key_pressed;
-    b32 debug_score_increment_pressed;
     CurrentMode current_mode;
     u64 delta_time_ms;
     i32 current_score;
     b32 can_score;
-    
+    ParticleClass jump_particles;
 
     Bird bird;
     i32 pipe_width;
@@ -141,10 +238,9 @@ static inline u32 ComputePixel(u32 src_pixel, u32 dest_pixel)
     f32 blue  = (1.0f - alpha) * dest_blue + alpha * src_blue;
 
     // Put back together
-    /* NOTE: the + 0.5f is for correct rounding */
-    result  = (((u32)(red   + 0.5f) << 24) | 
-               ((u32)(green + 0.5f) << 16) | 
-               ((u32)(blue  + 0.5f) <<  8) |
+    result  = ((RoundF32ToU32(red)   << 24) | 
+               (RoundF32ToU32(green) << 16) | 
+               (RoundF32ToU32(blue)  <<  8) |
                0xFF);
 
     return result;
@@ -202,6 +298,52 @@ static inline void DrawBitmap(BitmapAsset *bitmap, GameScreenBuffer *buffer,
 {
     DrawBitmapEx(bitmap, buffer, dest_x, dest_y, 0, 0,
                  bitmap->width, bitmap->height);
+}
+
+static void DrawParticle(ParticleClass *particle_class,
+                         f32 delta_time_seconds,
+                         GameScreenBuffer *game_screen_buffer)
+{
+    for(i32 i = 0; 
+        i < PARTICLE_MAX_AMOUNT;
+        i++) {
+        if(particle_class->in_use_idxs[i]) {
+            Particle *particle = particle_class->particles + i;
+
+            if(particle->opacity <= 0) {
+                ReleaseParticle(particle_class, i);
+                continue;
+            }
+
+
+            u32 velocity = delta_time_seconds * 256;
+            particle->x -= velocity;
+            particle->y += velocity;
+
+            BitmapAsset particle_bitmap = {
+                .memory = (void *) particle->memory,
+                .width  = PARTICLE_WIDTH,
+                .height = PARTICLE_HEIGHT,
+                .scale_factor = 1
+            };
+
+            particle->opacity -= Max(0 , PARTICLE_FADE_RATE * delta_time_seconds);
+
+            for(i32 i = 0;
+                i < PARTICLE_HEIGHT * PARTICLE_WIDTH;
+                i++) {
+                if((i + (i32)delta_time_seconds) % 2 == 0) {
+                    u32 new_alpha = PercentOf(particle->opacity, 255);
+                    u32 color = (COLOR_BLUE & ~0xFF) | (new_alpha & 0xFF);
+
+                    ((u32 *)particle_bitmap.memory)[i] = color;
+                }
+            }
+
+            DrawBitmap(&particle_bitmap, game_screen_buffer,
+                       particle->x, particle->y);
+        }
+    }
 }
 
 static inline void DrawDigit(u32 digit, GameState *game_state,
@@ -409,7 +551,6 @@ static void MoveBird(GameScreenBuffer *game_screen_buffer,
     /* TODO: Figure out how to get these speeds just right */
     if(game_state->jump_key_pressed) {
         game_state->bird.velocity = -(game_screen_buffer->playable_height * 0.6f);
-        game_state->jump_key_pressed = false;
     }
 
     f32 delta_time = game_state->delta_time_ms / 1000.0f;
@@ -499,6 +640,8 @@ static void PlayGame(GameScreenBuffer *game_screen_buffer,
 
         game_state->jump_key_pressed = false;
         game_state->current_mode = CM_PLAYING;
+
+        InitParticleClass(&game_state->jump_particles);
     }
 
 #if FLAPPY_DEBUG
@@ -550,12 +693,48 @@ static void PlayGame(GameScreenBuffer *game_screen_buffer,
     }
 
     MoveBird(game_screen_buffer, game_state);
+
+    if(game_state->jump_key_pressed) {
+        Bird bird =game_state->bird;
+        i32 random_value = 
+            PlatformGetRandomI32(0, bird.width);
+
+        f32 opacity1 = 100.0f;
+        f32 opacity2 = 100.0f;
+
+        if(game_state->delta_time_ms % 2 == 0) {
+            opacity1 = 50.0f + random_value;
+            opacity2 = 30.0f + random_value;
+        } else {
+            opacity1 = 100.0f - random_value;
+            opacity2 = 75.0f - random_value;
+        }
+
+        i32 particles_y = bird.y + bird.height;
+
+        GetNewParticle(&game_state->jump_particles, 
+                       bird.x,
+                       particles_y,
+                       opacity1);
+
+        GetNewParticle(&game_state->jump_particles, 
+                       bird.x + (bird.width / 2),
+                       particles_y,
+                       opacity2);
+        game_state->jump_key_pressed = false;
+    }
+
+    DrawParticle(&game_state->jump_particles,
+                 (game_state->delta_time_ms / 1000.0f),
+                 game_screen_buffer);
+
     DrawScore(game_state->current_score, game_state, game_screen_buffer);
 }
 
 static inline void ResetBird(GameScreenBuffer *game_screen_buffer,
                              GameState *game_state)
 {
+    game_state->bird.is_falling = false;
     game_state->bird.velocity = 0;
     game_state->bird.y = game_screen_buffer->playable_height / 2;
     game_state->bird.x = (PercentOf(28.67, game_screen_buffer->width) 
@@ -745,7 +924,8 @@ typedef struct {
     GameState game_state;
 } GameSetupResult;
 
-static GameSetupResult GameSetup(void *main_window_buffer, void *usable_memory, u8 *game_base_path)
+static GameSetupResult GameSetup(void *main_window_buffer, void *usable_memory,
+                                 u8 *game_base_path)
 {
     GameSetupResult result = {0};
 
@@ -760,6 +940,13 @@ static GameSetupResult GameSetup(void *main_window_buffer, void *usable_memory, 
     Arena temp_arena;
     ArenaInit(&temp_arena, TEMPORARY_ARENA_SIZE, (u8 *)&usable_memory[ASSET_ARENA_SIZE]);
 
+    Arena game_arena;
+    ArenaInit(&game_arena, GAME_ARENA_SIZE, (u8 *)usable_memory + ASSET_ARENA_SIZE + TEMPORARY_ARENA_SIZE);
+
+    result.game_state.asset_file_arena = asset_file_arena;
+    result.game_state.temp_arena = temp_arena;
+    result.game_state.game_arena = game_arena;
+
     String executable_base_path = {
         .data = game_base_path,
         .length = StringLength(game_base_path)
@@ -768,8 +955,6 @@ static GameSetupResult GameSetup(void *main_window_buffer, void *usable_memory, 
     result.game_state.can_score = true;
     result.game_state.current_mode = CM_GET_READY;
     result.game_state.delta_time_ms = 0;
-    result.game_state.asset_file_arena = asset_file_arena;
-    result.game_state.temp_arena = temp_arena;
     result.game_state.executable_base_path = executable_base_path;
     result.game_state.y_between_pipes = PercentOf(30, result.game_screen_buffer.playable_height);
     result.game_state.pipe_width = PercentOf(17, result.game_screen_buffer.width);

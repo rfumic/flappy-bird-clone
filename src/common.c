@@ -46,6 +46,13 @@ static inline void swap_u32(u32 *a, u32 *b)
     *b = temp;
 }
 
+/* TODO: potential intrinsic optimization */
+static inline u32 RoundF32ToU32(f32 value)
+{
+    u32 result  = (u32)(value + 0.5f);
+    return result;
+}
+
 ////////////////////
 /// Arenas
 ////////////////////
