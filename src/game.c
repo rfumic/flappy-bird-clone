@@ -700,9 +700,11 @@ static void PlayGame(GameScreenBuffer *game_screen_buffer,
     MoveBird(game_screen_buffer, game_state);
 
     if(game_state->jump_key_pressed) {
-        Bird bird =game_state->bird;
+        Bird *bird = &game_state->bird;
+        // NOTE: this is for flapping "animation"
+        bird->is_falling = true;
         i32 random_value = 
-            PlatformGetRandomI32(0, bird.width);
+            PlatformGetRandomI32(0, bird->width);
 
         f32 opacity1 = 100.0f;
         f32 opacity2 = 100.0f;
@@ -715,18 +717,17 @@ static void PlayGame(GameScreenBuffer *game_screen_buffer,
             opacity2 = 75.0f - random_value;
         }
 
-        i32 particles_y = bird.y + bird.height;
+        i32 particles_y = bird->y + bird->height;
 
         GetNewParticle(&game_state->jump_particles, 
-                       bird.x,
+                       bird->x,
                        particles_y,
                        opacity1);
 
         GetNewParticle(&game_state->jump_particles, 
-                       bird.x + (bird.width / 2),
+                       bird->x + (bird->width / 2),
                        particles_y,
                        opacity2);
-        game_state->jump_key_pressed = false;
     }
 
     DrawParticle(&game_state->jump_particles,
@@ -783,6 +784,8 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
     }
 
     DrawBird(game_state, game_screen_buffer);
+
+    game_state->jump_key_pressed = false;
 
 #if FLAPPY_DEBUG
     if(game_state->game_debug_flags & GDF_SHOW_FPS) {
