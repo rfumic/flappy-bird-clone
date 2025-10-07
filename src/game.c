@@ -1,6 +1,5 @@
 /* *
  * TODO: 
- *      - Particles when falling?
  *      - Animated ground
  *      - Fix number rendering
  *      - Sounds
@@ -125,16 +124,17 @@ static inline Particle *GetNewParticle(ParticleClass *particle_class,
                                        i32 x, i32 y, f32 opacity)
 {
         Particle *result = NULL;
+
         i32 particle_idx = ParticleIndexStackPop(&particle_class->free_idxs);
-        Assert(particle_idx >= 0);
-        result = particle_class->particles + particle_idx;
-        result->x = x;
-        result->y = y;
-        result->opacity = opacity;
+        if(particle_idx >= 0) {
+            result = particle_class->particles + particle_idx;
+            result->x = x;
+            result->y = y;
+            result->opacity = opacity;
 
-        particle_class->in_use_idxs[particle_idx] = true;
-
-        /* PlatformDebugPrint("Getting particle, index: %d", particle_idx); */
+            particle_class->in_use_idxs[particle_idx] = true;
+            /* PlatformDebugPrint("Getting particle, index: %d", particle_idx); */
+        }
 
         return result;
 }
@@ -172,6 +172,7 @@ typedef struct {
     i32 current_score;
     b32 can_score;
     ParticleClass jump_particles;
+    ParticleClass fall_particles;
 
     Bird bird;
     i32 pipe_width;
@@ -313,9 +314,10 @@ static inline void DrawBitmap(BitmapAsset *bitmap, GameScreenBuffer *buffer,
                  bitmap->width, bitmap->height);
 }
 
-static void DrawParticle(ParticleClass *particle_class,
-                         f32 delta_time_seconds,
-                         GameScreenBuffer *game_screen_buffer)
+static void DrawParticles(ParticleClass *particle_class,
+                          f32 delta_time_seconds,
+                          GameScreenBuffer *game_screen_buffer,
+                          u32 color)
 {
     for(i32 i = 0; 
         i < PARTICLE_MAX_AMOUNT;
@@ -347,7 +349,7 @@ static void DrawParticle(ParticleClass *particle_class,
                 i++) {
                 if((i + (i32)delta_time_seconds) % 2 == 0) {
                     u32 new_alpha = PercentOf(particle->opacity, 255);
-                    u32 color = (COLOR_BLUE & ~0xFF) | (new_alpha & 0xFF);
+                    color = (color & ~0xFF) | (new_alpha & 0xFF);
 
                     ((u32 *)particle_bitmap.memory)[i] = color;
                 }
@@ -665,6 +667,7 @@ static void PlayGame(GameScreenBuffer *game_screen_buffer,
         game_state->current_mode = CM_PLAYING;
 
         InitParticleClass(&game_state->jump_particles);
+        InitParticleClass(&game_state->fall_particles);
     }
 
 #if FLAPPY_DEBUG
@@ -716,46 +719,71 @@ static void PlayGame(GameScreenBuffer *game_screen_buffer,
 
     MoveBird(game_screen_buffer, game_state);
 
+    Bird *bird = &game_state->bird;
     if(game_state->jump_key_pressed) {
-        Bird *bird = &game_state->bird;
-        if(bird->curr_frame == BAF_UP) {
-            bird->curr_frame = BAF_MID;
-        } else if(bird->curr_frame == BAF_DOWN) {
-            bird->curr_frame = BAF_MID;
+        if(bird->curr_frame == BAF_UP || bird->curr_frame == BAF_DOWN) {
+                bird->curr_frame = BAF_MID;
         } else {
                 bird->curr_frame = BAF_DOWN;
         }
 
+        // Create when jumping
         i32 random_value = 
             PlatformGetRandomI32(0, bird->width);
 
-        f32 opacity1 = 100.0f;
-        f32 opacity2 = 100.0f;
+        f32 opacity_left  = 100.0f;
+        f32 opacity_right = 100.0f;
 
         if((i32)game_state->delta_time_sec % 2 == 0) {
-            opacity1 = 50.0f + random_value;
-            opacity2 = 30.0f + random_value;
+            opacity_left  = 50.0f + random_value;
+            opacity_right = 30.0f + random_value;
         } else {
-            opacity1 = 100.0f - random_value;
-            opacity2 = 75.0f - random_value;
+            opacity_left  = 100.0f - random_value;
+            opacity_right = 75.0f  - random_value;
         }
 
         i32 particles_y = bird->y + (bird->height / 2);
 
+        // left
         GetNewParticle(&game_state->jump_particles, 
                        bird->x,
                        particles_y,
-                       opacity1);
+                       opacity_left);
 
+        // right
         GetNewParticle(&game_state->jump_particles, 
                        bird->x + (bird->width / 2),
                        particles_y,
-                       opacity2);
+                       opacity_right);
     }
 
-    DrawParticle(&game_state->jump_particles,
+    if(bird->is_falling) {
+        // Create particles when falling
+        f32 opacity = 20.0f;
+
+        // left
+        GetNewParticle(&game_state->fall_particles, 
+                       bird->x,
+                       bird->y,
+                       opacity);
+
+        // right
+        GetNewParticle(&game_state->fall_particles, 
+                       bird->x + bird->width,
+                       bird->y,
+                       opacity);
+    }
+
+    // render particles
+    DrawParticles(&game_state->jump_particles,
                  game_state->delta_time_sec,
-                 game_screen_buffer);
+                 game_screen_buffer,
+                 COLOR_WHITE);
+
+    DrawParticles(&game_state->fall_particles,
+                 game_state->delta_time_sec,
+                 game_screen_buffer,
+                 COLOR_WHITE);
 
     DrawScore(game_state->current_score, game_state, game_screen_buffer);
 }
@@ -986,7 +1014,6 @@ static GameSetupResult GameSetup(void *main_window_buffer, void *usable_memory,
 
     result.game_state.can_score = true;
     result.game_state.current_mode = CM_GET_READY;
-    /* result.game_state.delta_time_sec = 0; */
     result.game_state.executable_base_path = executable_base_path;
     result.game_state.y_between_pipes = PercentOf(30, result.game_screen_buffer.playable_height);
     result.game_state.pipe_width = PercentOf(17, result.game_screen_buffer.width);
