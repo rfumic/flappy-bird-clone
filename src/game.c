@@ -1,6 +1,6 @@
 /* *
  * TODO: 
- *      - Correct flapping animation
+ *      - Particles when falling?
  *      - Animated ground
  *      - Fix number rendering
  *      - Sounds
@@ -46,6 +46,13 @@ typedef struct {
     u32  scale_factor;
 } BitmapAsset;
 
+typedef enum {
+   BAF_DOWN,
+   BAF_MID,
+   BAF_UP,
+   BAF_COUNT 
+} BirdAnimationFrame;
+
 typedef struct {
     i32 y;
     i32 x;
@@ -53,7 +60,13 @@ typedef struct {
     i32 width;
     f32 velocity;
     b32 is_falling;
+    BirdAnimationFrame curr_frame;
 } Bird;
+
+static inline void IncrementBirdFrame(Bird *bird)
+{
+    bird->curr_frame = (bird->curr_frame + 1) % BAF_COUNT;
+}
 
 #define PARTICLE_WIDTH  5
 #define PARTICLE_HEIGHT 5
@@ -490,7 +503,7 @@ static void DrawBird(GameState *game_state, GameScreenBuffer *game_screen_buffer
 {
     u32 bird_color  = COLOR_WHITE; 
     Bird bird = game_state->bird;
-    b32 is_falling = bird.is_falling == true ? 1 : 0;
+    /* b32 is_falling = bird.is_falling == true ? 1 : 0; */
     BitmapAsset bird_bitmap = game_state->boomislav_bitmap;
 
     if((game_state->game_debug_flags & GDF_PRIMITIVE_RENDER) ||
@@ -503,7 +516,8 @@ static void DrawBird(GameState *game_state, GameScreenBuffer *game_screen_buffer
     } else {
 
         u32 scale = bird_bitmap.scale_factor;
-        i32 x_offset = is_falling * (bird.width) * scale;
+        /* i32 x_offset = is_falling * (bird.width) * scale; */
+        i32 x_offset = bird.curr_frame * (bird.width) * scale;
 
         DrawBitmapEx(&bird_bitmap, game_screen_buffer,
                      bird.x, bird.y, x_offset, 0,
@@ -569,6 +583,9 @@ static void MoveBird(GameScreenBuffer *game_screen_buffer,
     i32 delta = game_state->bird.velocity * delta_time;
     game_state->bird.y += delta;
     game_state->bird.is_falling = delta >= 0;
+    if(game_state->bird.is_falling) {
+        game_state->bird.curr_frame = BAF_UP;
+    }
 
 #if FLAPPY_DEBUG
     if(game_state->game_debug_flags & GDF_ALWAYS_SCORE) {
@@ -701,8 +718,14 @@ static void PlayGame(GameScreenBuffer *game_screen_buffer,
 
     if(game_state->jump_key_pressed) {
         Bird *bird = &game_state->bird;
-        // NOTE: this is for flapping "animation"
-        bird->is_falling = true;
+        if(bird->curr_frame == BAF_UP) {
+            bird->curr_frame = BAF_MID;
+        } else if(bird->curr_frame == BAF_DOWN) {
+            bird->curr_frame = BAF_MID;
+        } else {
+                bird->curr_frame = BAF_DOWN;
+        }
+
         i32 random_value = 
             PlatformGetRandomI32(0, bird->width);
 
@@ -717,7 +740,7 @@ static void PlayGame(GameScreenBuffer *game_screen_buffer,
             opacity2 = 75.0f - random_value;
         }
 
-        i32 particles_y = bird->y + bird->height;
+        i32 particles_y = bird->y + (bird->height / 2);
 
         GetNewParticle(&game_state->jump_particles, 
                        bird->x,
@@ -737,14 +760,15 @@ static void PlayGame(GameScreenBuffer *game_screen_buffer,
     DrawScore(game_state->current_score, game_state, game_screen_buffer);
 }
 
-static inline void ResetBird(GameScreenBuffer *game_screen_buffer,
-                             GameState *game_state)
+static inline void ResetBird(Bird *bird,
+                             GameScreenBuffer *game_screen_buffer)
 {
-    game_state->bird.is_falling = false;
-    game_state->bird.velocity = 0;
-    game_state->bird.y = game_screen_buffer->playable_height / 2;
-    game_state->bird.x = (PercentOf(28.67, game_screen_buffer->width) 
-                          - (game_state->bird.width / 2));
+    bird->curr_frame = BAF_DOWN;
+    bird->is_falling = false;
+    bird->velocity = 0;
+    bird->y = game_screen_buffer->playable_height / 2;
+    bird->x = (PercentOf(28.67, game_screen_buffer->width) 
+                          - (bird->width / 2));
 }
 
 static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer, 
@@ -757,7 +781,7 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
     
     b32 new_game = false;
     if(game_state->current_mode == CM_GET_READY) {
-        ResetBird(game_screen_buffer, game_state);
+        ResetBird(&game_state->bird, game_screen_buffer);
         if(game_state->jump_key_pressed) {
             MoveBird(game_screen_buffer, game_state);
             game_state->current_mode = CM_PLAYING;
