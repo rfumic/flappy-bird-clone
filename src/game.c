@@ -155,7 +155,7 @@ typedef struct {
 
     b32 jump_key_pressed;
     CurrentMode current_mode;
-    u64 delta_time_ms;
+    f32 delta_time_sec;
     i32 current_score;
     b32 can_score;
     ParticleClass jump_particles;
@@ -478,7 +478,13 @@ static inline PipePair *GetAvailablePipe(GameScreenBuffer *screen_buffer,
 
 global PipePair pipes[3];
 
-#define GetPipeMovementSpeed(window_width) (0.0004340277778 * window_width / 2)
+
+static inline u32 GetPipeMovementSpeed(f32 delta_time_sec)
+{
+    u32 result = RoundF32ToU32(200 * delta_time_sec);
+
+    return result;
+}
 
 static void DrawBird(GameState *game_state, GameScreenBuffer *game_screen_buffer) 
 {
@@ -553,7 +559,7 @@ static void MoveBird(GameScreenBuffer *game_screen_buffer,
         game_state->bird.velocity = -(game_screen_buffer->playable_height * 0.6f);
     }
 
-    f32 delta_time = game_state->delta_time_ms / 1000.0f;
+    f32 delta_time = game_state->delta_time_sec;
 
     // NOTE: this is gravity
     game_state->bird.velocity += (game_screen_buffer->playable_height 
@@ -673,13 +679,12 @@ static void PlayGame(GameScreenBuffer *game_screen_buffer,
         }
 
         DrawPipePair(game_state, oldest_pipe, game_screen_buffer);
-        /* TODO: pipe movement still not FPS independent */
-        oldest_pipe->x -= GetPipeMovementSpeed(game_screen_buffer->width) * game_state->delta_time_ms;
+        oldest_pipe->x -= GetPipeMovementSpeed(game_state->delta_time_sec);
     }
 
     if(newest_pipe) {
         DrawPipePair(game_state, newest_pipe, game_screen_buffer);
-        newest_pipe->x -= GetPipeMovementSpeed(game_screen_buffer->width) * game_state->delta_time_ms;
+        newest_pipe->x -= GetPipeMovementSpeed( game_state->delta_time_sec);
     }
 
     if(current_pipe) {
@@ -689,7 +694,7 @@ static void PlayGame(GameScreenBuffer *game_screen_buffer,
         }
 
         DrawPipePair(game_state, current_pipe, game_screen_buffer);
-        current_pipe->x -= GetPipeMovementSpeed(game_screen_buffer->width) * game_state->delta_time_ms;
+        current_pipe->x -= GetPipeMovementSpeed(game_state->delta_time_sec);
     }
 
     MoveBird(game_screen_buffer, game_state);
@@ -702,7 +707,7 @@ static void PlayGame(GameScreenBuffer *game_screen_buffer,
         f32 opacity1 = 100.0f;
         f32 opacity2 = 100.0f;
 
-        if(game_state->delta_time_ms % 2 == 0) {
+        if((i32)game_state->delta_time_sec % 2 == 0) {
             opacity1 = 50.0f + random_value;
             opacity2 = 30.0f + random_value;
         } else {
@@ -725,7 +730,7 @@ static void PlayGame(GameScreenBuffer *game_screen_buffer,
     }
 
     DrawParticle(&game_state->jump_particles,
-                 (game_state->delta_time_ms / 1000.0f),
+                 game_state->delta_time_sec,
                  game_screen_buffer);
 
     DrawScore(game_state->current_score, game_state, game_screen_buffer);
@@ -954,7 +959,7 @@ static GameSetupResult GameSetup(void *main_window_buffer, void *usable_memory,
 
     result.game_state.can_score = true;
     result.game_state.current_mode = CM_GET_READY;
-    result.game_state.delta_time_ms = 0;
+    /* result.game_state.delta_time_sec = 0; */
     result.game_state.executable_base_path = executable_base_path;
     result.game_state.y_between_pipes = PercentOf(30, result.game_screen_buffer.playable_height);
     result.game_state.pipe_width = PercentOf(17, result.game_screen_buffer.width);

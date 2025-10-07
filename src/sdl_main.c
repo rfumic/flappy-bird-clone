@@ -51,7 +51,6 @@ static LoadedFile PlatformLoadEntireFile(char *file_path, Arena *arena)
     return result;
 }
 
-/* TODO: The game crashes when moving window between monitors */
 int main(int argc, char *argv[]) {
     (void)argc; (void)argv;
 
@@ -112,25 +111,28 @@ int main(int argc, char *argv[]) {
     GameState game_state = setup_result.game_state;
 
 
-    u64 current_tick = SDL_GetTicks();
-    u64 last_tick;
+    u64 fps_current_tick = SDL_GetTicks();
 
-    u32 start_time = 0;
-    u32 frame_count = 0;
+    u32 fps_start_time = 0;
+    u32 fps_frame_count = 0;
+
+    u64 d_now = SDL_GetPerformanceCounter();
+    u64 d_last = d_now;
+    f32 d_freq = (f32)SDL_GetPerformanceFrequency();
 
     b32 game_running = true;
     while(game_running) {
-        last_tick = current_tick;
-        current_tick = SDL_GetTicks();
+        fps_current_tick = SDL_GetTicks();
 
-        if(current_tick - start_time >= 1000) {
-            game_state.current_fps = (u32) frame_count / ((current_tick - start_time) / 1000.0f);
-            start_time = current_tick;
-            frame_count = 0;
+        d_last = d_now;
+        d_now = SDL_GetPerformanceCounter();
+        game_state.delta_time_sec = (f32)(d_now - d_last) / d_freq;
+
+        if(fps_current_tick - fps_start_time >= 1000) {
+            game_state.current_fps = (u32) fps_frame_count / ((fps_current_tick - fps_start_time) / 1000.0f);
+            fps_start_time = fps_current_tick;
+            fps_frame_count = 0;
         }
-
-
-        game_state.delta_time_ms = current_tick - last_tick;
 
         SDL_Event event;
         while(SDL_PollEvent(&event)) {
@@ -197,7 +199,7 @@ int main(int argc, char *argv[]) {
         SDL_RenderTexture(renderer, texture, 0, 0);
         SDL_RenderPresent(renderer);
 
-        frame_count++;
+        fps_frame_count++;
 #if PLATFORM_USE_VSYNC != 1
         SDL_Delay(16);
         /* SDL_Delay(32); */
