@@ -1,6 +1,5 @@
 /* *
  * TODO: 
- *      - Animated ground
  *      - Fix number rendering
  *      - Sounds
  *          - Jumping
@@ -12,6 +11,7 @@
  *      - Highscores menu
  * */
 
+/* NOTE: https://lospec.com/palette-list/baldur-neon-darkness */
 #define COLOR_BLACK 0x0F1B26FF
 #define COLOR_WHITE 0xF5E8D1FF
 #define COLOR_BLUE  0x20A5A6FF
@@ -34,8 +34,6 @@ typedef struct {
     i32    width;
     i32    actual_height;
     i32    playable_height;
-    u32    bytes_per_pixel;
-    u32    pitch;
 } GameScreenBuffer;
 
 typedef struct {
@@ -173,6 +171,7 @@ typedef struct {
     b32 can_score;
     ParticleClass jump_particles;
     ParticleClass fall_particles;
+    i32 ground_draw_amount;
 
     Bird bird;
     i32 pipe_width;
@@ -181,6 +180,7 @@ typedef struct {
     BitmapAsset pipe_bitmap;
     BitmapAsset digits_font_bitmap;
     BitmapAsset boomislav_bitmap;
+    BitmapAsset ground_bitmap;
     BitmapAsset test_bitmap;
 } GameState;
 
@@ -263,7 +263,8 @@ static inline u32 ComputePixel(u32 src_pixel, u32 dest_pixel)
 static inline void DrawBitmapEx(BitmapAsset *bitmap, GameScreenBuffer *buffer, 
                                 i32 dest_x, i32 dest_y,
                                 i32 src_x, i32 src_y,
-                                i32 sprite_w, i32 sprite_h)
+                                i32 sprite_w, i32 sprite_h,
+                                i32 max_x, i32 max_y)
 {
     u32 *src = (u32 *)bitmap->memory;
     u32 *dest = (u32 *)buffer->memory;
@@ -285,12 +286,12 @@ static inline void DrawBitmapEx(BitmapAsset *bitmap, GameScreenBuffer *buffer,
         dest_y = 0;
     }
 
-    if (dest_x + (end_x - start_x) > buffer->width) {
-        end_x = buffer->width - dest_x + start_x;
+    if (dest_x + (end_x - start_x) > max_x) {
+        end_x = max_x - dest_x + start_x;
     }
 
-    if (dest_y + (end_y - start_y) > buffer->playable_height) {
-        end_y = buffer->playable_height - dest_y + start_y;
+    if (dest_y + (end_y - start_y) > max_y) {
+        end_y = max_y - dest_y + start_y;
     }
 
     for (i32 y = start_y; y < end_y; y++) {
@@ -306,16 +307,27 @@ static inline void DrawBitmapEx(BitmapAsset *bitmap, GameScreenBuffer *buffer,
     }
 }
 
-// NOTE: draws entire bitmap. DrawBitmapEx draws sections
+// NOTE: draws only in playable part of buffer
+static inline void DrawBitmapInPlayable(BitmapAsset *bitmap, GameScreenBuffer *buffer, 
+                                        i32 dest_x, i32 dest_y)
+{
+    DrawBitmapEx(bitmap, buffer, dest_x, dest_y, 0, 0,
+                 bitmap->width, bitmap->height,
+                 buffer->width, buffer->playable_height);
+}
+
 static inline void DrawBitmap(BitmapAsset *bitmap, GameScreenBuffer *buffer, 
                               i32 dest_x, i32 dest_y)
 {
     DrawBitmapEx(bitmap, buffer, dest_x, dest_y, 0, 0,
-                 bitmap->width, bitmap->height);
+                 bitmap->width, bitmap->height,
+                 buffer->width, buffer->actual_height);
 }
 
+
+
 static void DrawParticles(ParticleClass *particle_class,
-                          f32 delta_time_seconds,
+                          f32 delta_time_sec,
                           GameScreenBuffer *game_screen_buffer,
                           u32 color)
 {
@@ -331,7 +343,7 @@ static void DrawParticles(ParticleClass *particle_class,
             }
 
 
-            u32 velocity = delta_time_seconds * 256;
+            u32 velocity = delta_time_sec * 256;
             particle->x -= velocity;
             particle->y += velocity;
 
@@ -342,12 +354,12 @@ static void DrawParticles(ParticleClass *particle_class,
                 .scale_factor = 1
             };
 
-            particle->opacity -= Max(0 , PARTICLE_FADE_RATE * delta_time_seconds);
+            particle->opacity -= Max(0 , PARTICLE_FADE_RATE * delta_time_sec);
 
             for(i32 i = 0;
                 i < PARTICLE_HEIGHT * PARTICLE_WIDTH;
                 i++) {
-                if((i + (i32)delta_time_seconds) % 2 == 0) {
+                if((i + (i32)delta_time_sec) % 2 == 0) {
                     u32 new_alpha = PercentOf(particle->opacity, 255);
                     color = (color & ~0xFF) | (new_alpha & 0xFF);
 
@@ -355,8 +367,8 @@ static void DrawParticles(ParticleClass *particle_class,
                 }
             }
 
-            DrawBitmap(&particle_bitmap, game_screen_buffer,
-                       particle->x, particle->y);
+            DrawBitmapInPlayable(&particle_bitmap, game_screen_buffer,
+                                 particle->x, particle->y);
         }
     }
 }
@@ -374,7 +386,9 @@ static inline void DrawDigit(u32 digit, GameState *game_state,
     DrawBitmapEx(&game_state->digits_font_bitmap, game_screen_buffer, 
                  start_x, start_y, x_offset, 0, 
                  FONT_DIGIT_WIDTH * scale_factor, 
-                 FONT_DIGIT_HEIGHT * scale_factor);
+                 FONT_DIGIT_HEIGHT * scale_factor,
+                 game_screen_buffer->width,
+                 game_screen_buffer->playable_height);
 }
 
 static inline void DrawPipePair(GameState *game_state, PipePair *pipe_pair, 
@@ -387,10 +401,10 @@ static inline void DrawPipePair(GameState *game_state, PipePair *pipe_pair,
         // draw top pipe
         i32 top_pipe_y = 
             pipe_pair->bottom_pipe_y - game_state->y_between_pipes - bitmap.height;
-        DrawBitmap(&bitmap, buffer, pipe_pair->x, top_pipe_y);
+        DrawBitmapInPlayable(&bitmap, buffer, pipe_pair->x, top_pipe_y);
 
         // draw bottom pipe
-        DrawBitmap(&bitmap, buffer, pipe_pair->x, pipe_pair->bottom_pipe_y);
+        DrawBitmapInPlayable(&bitmap, buffer, pipe_pair->x, pipe_pair->bottom_pipe_y);
 
     } else {
         u32 pipe_color = 0x00FF00FF;
@@ -524,7 +538,9 @@ static void DrawBird(GameState *game_state, GameScreenBuffer *game_screen_buffer
         DrawBitmapEx(&bird_bitmap, game_screen_buffer,
                      bird.x, bird.y, x_offset, 0,
                      bird.width * scale,
-                     bird.height * scale);
+                     bird.height * scale,
+                     game_screen_buffer->width,
+                     game_screen_buffer->actual_height);
     }
 }
 
@@ -802,9 +818,6 @@ static inline void ResetBird(Bird *bird,
 static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer, 
                                 GameState *game_state) 
 {
-#if FLAPPY_DEBUG
-    static u32 debug_frame_counter = 0;
-#endif
     DrawBackground(game_screen_buffer);
     
     b32 new_game = false;
@@ -825,14 +838,26 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
 
     // NOTE: DrawGround
     {
-        u32 color = COLOR_WHITE;
-        i32 start_y = game_screen_buffer->playable_height;
-        i32 end_y = game_screen_buffer->actual_height;
+        static i32 start_x = 0;
+        static i32 draw_amount = 0;
 
-        DrawRectangle(game_screen_buffer,
-                      0, start_y,
-                      game_screen_buffer->width, end_y,
-                      color);
+        BitmapAsset *bitmap = &game_state->ground_bitmap;
+        start_x -= GetPipeMovementSpeed(game_state->delta_time_sec);
+        if(start_x < -bitmap->width) {
+            start_x = 0;
+        }
+        
+        if(draw_amount == 0) {
+            draw_amount = (game_screen_buffer->width / bitmap->width) + 2;
+        }
+
+        for(i32 i = 0; i < draw_amount; i++) {
+            DrawBitmap(&game_state->ground_bitmap,
+                       game_screen_buffer,
+                       start_x + (bitmap->width * i),
+                       game_screen_buffer->playable_height);
+        }
+
     }
 
     DrawBird(game_state, game_screen_buffer);
@@ -850,9 +875,6 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
                    game_state, game_screen_buffer);
 
     }
-
-    (void)debug_frame_counter;
-    debug_frame_counter++;
 #endif
 }
 
@@ -971,6 +993,9 @@ static inline void LoadAllAssets(GameState *game_state)
 
     game_state->boomislav_bitmap = 
         LoadBitmapAsset(game_state, S("boomislav.bmp"), 1, COLOR_WHITE);
+
+    game_state->ground_bitmap = 
+        LoadBitmapAsset(game_state, S("ground.bmp"), 1, COLOR_WHITE);
 
     game_state->digits_font_bitmap = 
         LoadBitmapAsset(game_state, S("digits_font.bmp"), 3, COLOR_RED);
