@@ -1,6 +1,5 @@
 /* *
  * TODO: 
- *      - Fix number rendering
  *      - Sounds
  *          - Jumping
  *          - Score sound
@@ -912,7 +911,7 @@ static BitmapAsset LoadBitmapAsset(GameState *game_state,
     u8 *full_file_path = ArenaAllocArray(&game_state->temp_arena, u8, 
                                          exe_path.length + 
                                          assets_folder.length + 
-                                         asset_file_name.length);
+                                         asset_file_name.length + 1);
     i32 curr = 0;
 
     for(i32 i = 0; i < exe_path.length; i++) {
@@ -926,6 +925,8 @@ static BitmapAsset LoadBitmapAsset(GameState *game_state,
     for(i32 i = 0; i < asset_file_name.length; i++) {
         full_file_path[curr++] = asset_file_name.data[i];
     }
+    full_file_path[curr++] = '\0';
+
 
     LoadedFile bitmap_file = 
         PlatformLoadEntireFile((char *)full_file_path, &game_state->temp_arena);
@@ -938,16 +939,18 @@ static BitmapAsset LoadBitmapAsset(GameState *game_state,
 
 
         // flip rows
-        for(i32 row = 0; row < header->height / 2; row++) {
+        for(i32 row = 0; row < (header->height + 1) / 2; row++) {
+            i32 opposite = header->height - 1 - row;
+
             for(i32 col = 0; col < header->width; col++) {
-                u32 *first = &pixels[row * header->width + col];
-                *first = ARGB_To_RGBA(*first);
+                u32 *top = &pixels[row * header->width + col];
+                *top = ARGB_To_RGBA(*top);
+                u32 *bottom = &pixels[opposite * header->width + col];
 
-                u32 *second = &pixels[(header->height - 1 - row) * 
-                                      header->width + col];
-                *second = ARGB_To_RGBA(*second);
-
-                swap_u32(first, second);
+                if(row != opposite) {
+                    *bottom = ARGB_To_RGBA(*bottom);;
+                    swap_u32(top, bottom);
+                } 
             }
         }
 
