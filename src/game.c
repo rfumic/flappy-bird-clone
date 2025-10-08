@@ -1,13 +1,13 @@
 /* *
  * TODO: 
+ *      - Main menu
+ *      - After death menu
+ *      - Pause menu
+ *      - Highscores menu
  *      - Sounds
  *          - Jumping
  *          - Score sound
  *          - Mute sound option
- *      - After death menu
- *      - Pause menu
- *      - Main menu
- *      - Highscores menu
  * */
 
 /* NOTE: https://lospec.com/palette-list/baldur-neon-darkness */
@@ -180,6 +180,7 @@ typedef struct {
     BitmapAsset digits_font_bitmap;
     BitmapAsset boomislav_bitmap;
     BitmapAsset ground_bitmap;
+    BitmapAsset upper_chars_bitmap;
     BitmapAsset test_bitmap;
 } GameState;
 
@@ -372,22 +373,80 @@ static void DrawParticles(ParticleClass *particle_class,
     }
 }
 
+static inline void DrawSprite(u32 sprite_index, BitmapAsset *bitmap,
+                             GameScreenBuffer *game_screen_buffer,
+                             i32 start_x, i32 start_y)
+{
+    Assert(sprite_index >= 0 && (i32)sprite_index <= (bitmap->width - FONT_DIGIT_WIDTH));
+
+    const u32 scale_factor = bitmap->scale_factor;
+
+    i32 x_offset = sprite_index * (FONT_DIGIT_WIDTH + 1) * scale_factor;
+
+    DrawBitmapEx(bitmap, game_screen_buffer, 
+                 start_x, start_y, x_offset, 0, 
+                 FONT_DIGIT_WIDTH * scale_factor, 
+                 FONT_DIGIT_HEIGHT * scale_factor,
+                 game_screen_buffer->width,
+                 game_screen_buffer->actual_height);
+}
+
+static inline void DrawChar(u8 letter, GameState *game_state,
+                            GameScreenBuffer *game_screen_buffer,
+                            i32 start_x, i32 start_y)
+{
+    if(letter >= 'A' && letter <= 'Z') {
+        u32 index = letter - 'A';
+        DrawSprite(index, &game_state->upper_chars_bitmap,
+                   game_screen_buffer, start_x, start_y);
+    }
+}
+
+static inline void DrawString(String string, GameState *game_state,
+                              GameScreenBuffer *game_screen_buffer,
+                              i32 start_x, i32 start_y)
+{
+    const u32 scale_factor = game_state->upper_chars_bitmap.scale_factor;
+    i32 char_width = FONT_DIGIT_WIDTH * scale_factor;
+
+    i32 curr_x = start_x; 
+    for(i32 i = 0; i < string.length; i++) {
+        u8 letter = string.data[i];
+
+        DrawChar(letter, game_state, game_screen_buffer,
+                 curr_x, start_y);
+
+        // better spaceing between chars
+        i32 spacing_amount;
+        switch(letter) {
+            case 'I':{
+                spacing_amount = - ( 2 * scale_factor);
+                break;
+            }
+            case 'J':
+            case 'L':
+            case 'S': {
+                spacing_amount = 0;
+                break;
+            }
+            default: {
+                spacing_amount = scale_factor;
+            }
+
+        }
+
+        curr_x += char_width + spacing_amount;
+    }
+}
+
 static inline void DrawDigit(u32 digit, GameState *game_state,
                              GameScreenBuffer *game_screen_buffer,
                              i32 start_x, i32 start_y)
 {
     Assert(digit >= 0 && digit < 10);
 
-    const u32 scale_factor = game_state->digits_font_bitmap.scale_factor;
-
-    i32 x_offset = digit * (FONT_DIGIT_WIDTH + 1) * scale_factor;
-
-    DrawBitmapEx(&game_state->digits_font_bitmap, game_screen_buffer, 
-                 start_x, start_y, x_offset, 0, 
-                 FONT_DIGIT_WIDTH * scale_factor, 
-                 FONT_DIGIT_HEIGHT * scale_factor,
-                 game_screen_buffer->width,
-                 game_screen_buffer->playable_height);
+    DrawSprite(digit, &game_state->digits_font_bitmap,
+               game_screen_buffer, start_x, start_y);
 }
 
 static inline void DrawPipePair(GameState *game_state, PipePair *pipe_pair, 
@@ -822,6 +881,10 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
     b32 new_game = false;
     if(game_state->current_mode == CM_GET_READY) {
         ResetBird(&game_state->bird, game_screen_buffer);
+
+        DrawString(S("PRESS UP TO START"), game_state, game_screen_buffer,
+                game_state->bird.x, game_state->bird.y + game_state->bird.height + 20);
+
         if(game_state->jump_key_pressed) {
             MoveBird(game_screen_buffer, game_state);
             game_state->current_mode = CM_PLAYING;
@@ -860,6 +923,8 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
     }
 
     DrawBird(game_state, game_screen_buffer);
+
+
 
     game_state->jump_key_pressed = false;
 
@@ -1002,6 +1067,9 @@ static inline void LoadAllAssets(GameState *game_state)
 
     game_state->digits_font_bitmap = 
         LoadBitmapAsset(game_state, S("digits_font.bmp"), 3, COLOR_RED);
+
+    game_state->upper_chars_bitmap = 
+        LoadBitmapAsset(game_state, S("uppercase_chars_font.bmp"), 2, COLOR_RED);
 
     game_state->test_bitmap = 
         LoadBitmapAsset(game_state, S("test_bitmap.bmp"), 1, 0);
