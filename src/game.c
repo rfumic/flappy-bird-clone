@@ -343,7 +343,7 @@ static void DrawParticles(ParticleClass *particle_class,
             }
 
 
-            u32 velocity = delta_time_sec * 256;
+            u32 velocity = (u32)(delta_time_sec * 256);
             particle->x -= velocity;
             particle->y += velocity;
 
@@ -360,7 +360,7 @@ static void DrawParticles(ParticleClass *particle_class,
                 i < PARTICLE_HEIGHT * PARTICLE_WIDTH;
                 i++) {
                 if((i + (i32)delta_time_sec) % 2 == 0) {
-                    u32 new_alpha = PercentOf(particle->opacity, 255);
+                    u32 new_alpha = (u32)PercentOf(particle->opacity, 255);
                     color = (color & ~0xFF) | (new_alpha & 0xFF);
 
                     ((u32 *)particle_bitmap.memory)[i] = color;
@@ -442,9 +442,9 @@ static inline void DrawPipePair(GameState *game_state, PipePair *pipe_pair,
 static inline i32 GetRandomPipeY(GameState *game_state, i32 game_screen_height) {
     i32 result;
 
-    i32 y_margin_top    = PercentOf(10, game_screen_height) + 
+    i32 y_margin_top    = (i32)PercentOf(10, game_screen_height) + 
                           game_state->y_between_pipes;
-    i32 y_margin_bottom = PercentOf(90, game_screen_height);
+    i32 y_margin_bottom = (i32)PercentOf(90, game_screen_height);
 
     result = PlatformGetRandomI32(y_margin_top, y_margin_bottom);
     
@@ -598,7 +598,7 @@ static void MoveBird(GameScreenBuffer *game_screen_buffer,
                                   * 0.002f * 30.0f * 30.0f) 
                                   * delta_time;
 
-    i32 delta = game_state->bird.velocity * delta_time;
+    i32 delta = (i32)(game_state->bird.velocity * delta_time);
     game_state->bird.y += delta;
     game_state->bird.is_falling = delta >= 0;
     if(game_state->bird.is_falling) {
@@ -652,7 +652,7 @@ static inline void DrawScore(u32 score, GameState *game_state,
                              GameScreenBuffer *game_screen_buffer)
 {
     i32 x = game_screen_buffer->width / 2;
-    i32 y = PercentOf(game_screen_buffer->playable_height, 10);
+    i32 y = (i32)PercentOf(game_screen_buffer->playable_height, 10);
     DrawNumber(score, x, y, game_state, game_screen_buffer);
 }
 
@@ -811,8 +811,8 @@ static inline void ResetBird(Bird *bird,
     bird->is_falling = false;
     bird->velocity = 0;
     bird->y = game_screen_buffer->playable_height / 2;
-    bird->x = (PercentOf(28.67, game_screen_buffer->width) 
-                          - (bird->width / 2));
+    bird->x = (i32)(PercentOf(28.67f, game_screen_buffer->width) 
+                - (bird->width / 2));
 }
 
 static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer, 
@@ -1016,7 +1016,7 @@ static GameSetupResult GameSetup(void *main_window_buffer, void *usable_memory,
 
     result.game_screen_buffer.memory          = main_window_buffer;
     result.game_screen_buffer.actual_height   = WINDOW_HEIGHT;
-    result.game_screen_buffer.playable_height = PercentOf(91, WINDOW_HEIGHT);
+    result.game_screen_buffer.playable_height = (i32)PercentOf(91, WINDOW_HEIGHT);
     result.game_screen_buffer.width           = WINDOW_WIDTH;
 
     Arena asset_file_arena;
@@ -1040,19 +1040,12 @@ static GameSetupResult GameSetup(void *main_window_buffer, void *usable_memory,
     result.game_state.can_score = true;
     result.game_state.current_mode = CM_GET_READY;
     result.game_state.executable_base_path = executable_base_path;
-    result.game_state.y_between_pipes = PercentOf(30, result.game_screen_buffer.playable_height);
-    result.game_state.pipe_width = PercentOf(17, result.game_screen_buffer.width);
+    result.game_state.y_between_pipes = (i32)PercentOf(30, result.game_screen_buffer.playable_height);
+    result.game_state.pipe_width = (i32)PercentOf(17, result.game_screen_buffer.width);
 
-    /* result.game_state.bird.width = PercentOf(11, result.game_screen_buffer.width); */
     result.game_state.bird.width = 40;
-    /* result.game_state.bird.height = PercentOf(7, result.game_screen_buffer.playable_height); */
     result.game_state.bird.height = 40;
-
-    result.game_state.bird.y = result.game_screen_buffer.playable_height / 2;
-    result.game_state.bird.x = (PercentOf(28.67, result.game_screen_buffer.width) 
-                                - (result.game_state.bird.width / 2));
-    result.game_state.bird.velocity = 0;
-
+    ResetBird(&result.game_state.bird, &result.game_screen_buffer);
 
     LoadAllAssets(&result.game_state);
 

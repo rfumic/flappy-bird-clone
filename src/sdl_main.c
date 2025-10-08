@@ -113,7 +113,7 @@ int main(int argc, char *argv[]) {
 
     u64 fps_current_tick = SDL_GetTicks();
 
-    u32 fps_start_time = 0;
+    u64 fps_start_time = 0;
     u32 fps_frame_count = 0;
 
     u64 d_now = SDL_GetPerformanceCounter();
@@ -129,7 +129,7 @@ int main(int argc, char *argv[]) {
         game_state.delta_time_sec = (f32)(d_now - d_last) / d_freq;
 
         if(fps_current_tick - fps_start_time >= 1000) {
-            game_state.current_fps = (u32) fps_frame_count / ((fps_current_tick - fps_start_time) / 1000.0f);
+            game_state.current_fps = (u32) (fps_frame_count / ((fps_current_tick - fps_start_time) / 1000.0f));
             fps_start_time = fps_current_tick;
             fps_frame_count = 0;
         }
