@@ -1089,6 +1089,7 @@ static inline void LoadAllAssets(GameState *game_state)
     game_state->ground_bitmap = 
         LoadBitmapAsset(game_state, S("ground.bmp"), 1, COLOR_WHITE);
 
+    /* NOTE: https://opengameart.org/content/ascii-bitmap-font-cellphone */
     game_state->digits_font_bitmap = 
         LoadBitmapAsset(game_state, S("digits_font.bmp"), 3, COLOR_RED);
 
