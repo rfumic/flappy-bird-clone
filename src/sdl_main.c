@@ -1,3 +1,7 @@
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+#endif
+
 #include <SDL3/SDL.h>
 #include <stdlib.h>
 
@@ -132,14 +136,20 @@ static void main_loop() {
         SDL_DestroyRenderer(renderer);
         SDL_DestroyWindow(window);
         SDL_Quit();
+#ifdef __EMSCRIPTEN__
+        emscripten_cancel_main_loop();
+#else
         exit(0);
+#endif // __EMSCRIPTEN__
     }
 
     fps_current_tick = SDL_GetTicks();
 
     d_last = d_now;
     d_now = SDL_GetPerformanceCounter();
-    game_state.delta_time_sec = (f32)(d_now - d_last) / d_freq;
+    f32 diff = (d_now - d_last);
+    diff = diff <= 0 ? 1.0f : diff;
+    game_state.delta_time_sec = (f32) diff / d_freq;
 
     if(fps_current_tick - fps_start_time >= 1000) {
         game_state.current_fps = (u32) (fps_frame_count / ((fps_current_tick - fps_start_time) / 1000.0f));
@@ -248,16 +258,20 @@ int main() {
 
     fps_current_tick = SDL_GetTicks();
 
-    fps_start_time = 0;
+    fps_start_time = SDL_GetTicks();
     fps_frame_count = 0;
 
     d_now = SDL_GetPerformanceCounter();
     d_last = d_now;
     d_freq = (f32)SDL_GetPerformanceFrequency();
 
+#ifdef __EMSCRIPTEN__
+    emscripten_set_main_loop(main_loop, 0, 1);
+#else
     while(true) {
         main_loop();
     }
+#endif // __EMSCRIPTEN__
 
     return 0;
 }
