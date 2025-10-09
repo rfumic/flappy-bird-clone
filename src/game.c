@@ -1,5 +1,6 @@
 /* *
  * TODO: 
+ *      - Click/Tap to jump
  *      - Main menu
  *      - After death menu
  *      - Pause menu
@@ -8,6 +9,7 @@
  *          - Jumping
  *          - Score sound
  *          - Mute sound option
+ *      - Switch to keydown handling
  * */
 
 /* NOTE: https://lospec.com/palette-list/baldur-neon-darkness */
@@ -153,6 +155,16 @@ typedef enum {
     CM_COUNT,
 } CurrentMode;
 
+typedef enum {
+    KEY_UP_ARROW = (1u << 0),
+    KEY_MOUSE    = (1u << 1),
+    KEY_ESCAPE   = (1u << 2),
+    KEY_SPACE    = (1u << 3),
+    KEY_COUNT
+} KeyMask;
+
+typedef u32 Keys;
+
 // NOTE: this should get passed by pointer
 typedef struct {
     Arena asset_file_arena;
@@ -162,6 +174,8 @@ typedef struct {
     GameDebugFlags game_debug_flags;
     b32 debug_score_increment_pressed;
     u32 current_fps;
+
+    Keys keys_up;
 
     b32 jump_key_pressed;
     CurrentMode current_mode;
@@ -877,12 +891,21 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
                                 GameState *game_state) 
 {
     DrawBackground(game_screen_buffer);
+
+    if((game_state->keys_up & KEY_UP_ARROW) || 
+       (game_state->keys_up & KEY_SPACE) || 
+       (game_state->keys_up & KEY_MOUSE)) {
+        game_state->jump_key_pressed = true;
+    }
     
     b32 new_game = false;
     if(game_state->current_mode == CM_GET_READY) {
         ResetBird(&game_state->bird, game_screen_buffer);
 
-        DrawString(S("PRESS UP TO START"), game_state, game_screen_buffer,
+        /* TODO: change text on mobile */
+        String action_string = S("PRESS UP TO START");
+
+        DrawString(action_string, game_state, game_screen_buffer,
                 game_state->bird.x, game_state->bird.y + game_state->bird.height + 20);
 
         if(game_state->jump_key_pressed) {
@@ -927,6 +950,7 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
 
 
     game_state->jump_key_pressed = false;
+    game_state->keys_up = 0;
 
 #if FLAPPY_DEBUG
     if(game_state->game_debug_flags & GDF_SHOW_FPS) {
@@ -1069,7 +1093,7 @@ static inline void LoadAllAssets(GameState *game_state)
         LoadBitmapAsset(game_state, S("digits_font.bmp"), 3, COLOR_RED);
 
     game_state->upper_chars_bitmap = 
-        LoadBitmapAsset(game_state, S("uppercase_chars_font.bmp"), 2, COLOR_RED);
+        LoadBitmapAsset(game_state, S("uppercase_chars_font.bmp"), 2, COLOR_WHITE);
 
     game_state->test_bitmap = 
         LoadBitmapAsset(game_state, S("test_bitmap.bmp"), 1, 0);

@@ -141,9 +141,35 @@ int main(int argc, char *argv[]) {
                     game_running = false;
                     break;
                 }
+
+                case SDL_EVENT_MOUSE_BUTTON_UP: {
+                    game_state.keys_up |= KEY_MOUSE;
+                    break;
+                }
+
+                case SDL_EVENT_KEY_DOWN: {
+                    break;
+                }
+
                 case SDL_EVENT_KEY_UP: {
                     if(event.key.key == SDLK_UP) {
-                        game_state.jump_key_pressed = true;
+                        game_state.keys_up |= KEY_UP_ARROW;
+                        break;
+                    }
+
+                    if(event.key.key == SDLK_SPACE) {
+                        game_state.keys_up |= KEY_SPACE;
+                        break;
+                    }
+
+
+                    if(event.key.key == SDLK_ESCAPE) {
+                        // NOTE: "p" is for pausing in debug mode
+#if FLAPPY_DEBUG
+                        game_running = false;
+#else 
+                        game_state.keys_up |= KEY_ESCAPE;
+#endif // FLAPPY_DEBUG
                         break;
                     }
 
@@ -168,20 +194,16 @@ int main(int argc, char *argv[]) {
                         break;
                     }
 
-#endif
-
-                }
-                case SDL_EVENT_KEY_DOWN: {
-
-                    if(event.key.key == SDLK_ESCAPE) {
-                        game_running = false;
-                        break;
-                    }
-
                     if(event.key.key == SDLK_R) {
                         game_state.current_mode = CM_GET_READY;
                         break;
                     }
+
+                    if(event.key.key == SDLK_P) {
+                        game_state.keys_up |= KEY_ESCAPE;
+                        break;
+                    }
+#endif // FLAPPY_DEBUG
 
                 }
             }
