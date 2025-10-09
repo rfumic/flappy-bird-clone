@@ -994,7 +994,7 @@ static BitmapAsset LoadBitmapAsset(GameState *game_state,
     BitmapAsset result = {0};
 
     String exe_path = game_state->executable_base_path;
-    String assets_folder = S("../assets/");
+    String assets_folder = S(ROOT_ASSET_FOLDER"/");
 
     // create full asset file path
     u8 *full_file_path = ArenaAllocArray(&game_state->temp_arena, u8, 

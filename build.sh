@@ -13,7 +13,9 @@ CUSTOM_FLAGS="-D FLAPPY_DEBUG"
 WARNING_FLAGS="-Wall -Wextra -Wdouble-promotion -Wconversion -Wno-unused-function  -Wno-sign-conversion"
 C_FLAGS="-std=c99 -fsanitize=address $WARNING_FLAGS -g3"
 
-mkdir -p out
+mkdir -p out/assets
+
+cp ./assets/*.bmp ./out/assets/
 
 set -x
 clang src/sdl_main.c \

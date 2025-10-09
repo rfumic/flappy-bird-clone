@@ -1,6 +1,14 @@
 #ifndef PLATFORM_H_
 #define PLATFORM_H_
 
+#ifdef __EMSCRIPTEN__
+#define ROOT_ASSET_FOLDER "/assets"
+
+#else
+#define ROOT_ASSET_FOLDER "./assets"
+
+#endif // __EMSCRIPTEN__
+
 typedef struct {
     void   *memory;
     usize  size;
