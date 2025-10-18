@@ -103,3 +103,37 @@ static inline size StringLength(u8 *input)
     return input - start - 1;
 }
 
+/* TODO: check if this gets inlined */
+static inline size StringArrayLengths(String *array, i32 count)
+{
+    size result = 0;
+    for(i32 i = 0; i < count; i++) {
+        result += array[i].length;
+    }
+    return result;
+}
+
+#define StringArrayToCString(string_array, arena) \
+    StringPointerToCString(string_array, ArrayCount(string_array), arena)
+
+static inline u8 *StringPointerToCString(String *string_array, i32 string_count, Arena *arena)
+{
+    Assert(string_count >= 0);
+    
+    size total_length = StringArrayLengths(string_array, string_count) + 1;
+   
+    u8 *result = ArenaAllocArray(arena, u8, total_length);
+
+    i32 result_idx = 0;
+
+    for(i32 string_idx = 0; string_idx < string_count; string_idx++) {
+        String curr_string = string_array[string_idx];
+        
+        for(i32 char_idx = 0; char_idx < curr_string.length; char_idx++) {
+            result[result_idx++] = curr_string.data[char_idx];
+        }
+    }
+    result[result_idx++] = '\0';
+
+    return result;
+}

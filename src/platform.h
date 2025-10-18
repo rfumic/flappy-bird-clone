@@ -1,6 +1,9 @@
 #ifndef PLATFORM_H_
 #define PLATFORM_H_
 
+#define ORG_NAME "rfumic"
+#define APP_NAME "Boomislav"
+
 #ifdef __EMSCRIPTEN__
 #define ROOT_ASSET_FOLDER "/assets"
 
@@ -9,17 +12,30 @@
 
 #endif // __EMSCRIPTEN__
 
+#define GAME_SAVE_FILE_NAME "game_save_file.bin"
+
 typedef struct {
     void   *memory;
     usize  size;
-} LoadedFile;
+} PlatformLoadedFile;
+
+typedef struct {
+    void *data;
+    usize size;
+} PlatformDataToWrite;
 
 static inline i32 PlatformGetRandomI32(i32 min_value, i32 max_value);
-static LoadedFile PlatformLoadEntireFile(char *file_path, Arena *arena);
+static PlatformLoadedFile PlatformLoadEntireFile(char *file_path, Arena *arena);
+static b32 PlatformWriteEntireFile(PlatformDataToWrite file_data, char *file_path);
+static inline void PlatformShowErrorWindow(char *message);
 static inline f32 PlatformSineF32(f32 x);
 
+#ifdef FLAPPY_DEBUG
 // TODO: this shouldnt be here
 #define PlatformDebugPrint(format_str, ...) SDL_Log(format_str, ##__VA_ARGS__)
+#else
+#define PlatformDebugPrint(format_str, ...) 
+#endif // FLAPPY_DEBUG
 
 #define ASSET_ARENA_SIZE     MB(4)
 #define TEMPORARY_ARENA_SIZE MB(1)

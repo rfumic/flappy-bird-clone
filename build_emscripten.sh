@@ -6,8 +6,8 @@ APP_NAME="flappy_bird"
 
 CUSTOM_FLAGS="-D FLAPPY_DEBUG"
 WARNING_FLAGS="-Wall -Wextra -Wdouble-promotion -Wconversion -Wno-unused-function  -Wno-sign-conversion"
-C_FLAGS="-std=c99 -fsanitize=address $WARNING_FLAGS -g3"
-EMSCRIPTEN_FLAGS="-sUSE_SDL=3 -gsource-map --shell-file emscripten_template.html"
+C_FLAGS="-std=gnu99 -fsanitize=address $WARNING_FLAGS -g3"
+EMSCRIPTEN_FLAGS="-sUSE_SDL=3 -lidbfs.js -gsource-map --shell-file emscripten_template.html -sEXPORTED_RUNTIME_METHODS=['callMain']"
 
 
 mkdir -p out/assets

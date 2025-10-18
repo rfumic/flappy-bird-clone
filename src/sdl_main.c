@@ -25,9 +25,14 @@ static inline i32 PlatformGetRandomI32(i32 min_value, i32 max_value)
     return result;
 }
 
-static LoadedFile PlatformLoadEntireFile(char *file_path, Arena *arena)
+static inline void PlatformShowErrorWindow(char *message)
 {
-    LoadedFile result = {0};
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Boomislav Runtime Error", message, NULL);
+}
+
+static PlatformLoadedFile PlatformLoadEntireFile(char *file_path, Arena *arena)
+{
+    PlatformLoadedFile result = {0};
 
     SDL_PathInfo sdl_path_info;
     b32 info_loaded = SDL_GetPathInfo(file_path, &sdl_path_info);
@@ -45,12 +50,39 @@ static LoadedFile PlatformLoadEntireFile(char *file_path, Arena *arena)
 
         SDL_IOStatus status = SDL_GetIOStatus(sdl_stream);
         if(bytes_read == 0 && status != SDL_IO_STATUS_EOF) {
-            result = (LoadedFile){0};
+            result = (PlatformLoadedFile){0};
         }
         SDL_CloseIO(sdl_stream);
 
         result.memory = file_memory;
     }
+
+    return result;
+}
+
+// NOTE: 1 is ok
+static b32 PlatformWriteEntireFile(PlatformDataToWrite file_data, char *file_path)
+{
+    b32 result = false;
+
+    SDL_IOStream *sdl_stream = SDL_IOFromFile(file_path, "wb");
+
+    usize bytes_written = SDL_WriteIO(sdl_stream, file_data.data, file_data.size);
+
+    if(bytes_written == file_data.size) {
+        result = true;
+    }
+
+    SDL_CloseIO(sdl_stream);
+
+#ifdef __EMSCRIPTEN__
+    EM_ASM( 
+        FS.syncfs(false, function (err) {
+        if (err) console.error('Sync error:', err);
+        else console.log('Data synced to IndexedDB');
+        });
+    );
+#endif
 
     return result;
 }
@@ -77,7 +109,7 @@ static int initialize()
     SDL_Init(SDL_INIT_VIDEO);
 
     window = SDL_CreateWindow(
-        "BOOMISLAV",
+        APP_NAME,
         WINDOW_WIDTH,
         WINDOW_HEIGHT,
         0 // SDL_WINDOW_OPENGL
@@ -120,9 +152,34 @@ static int initialize()
         return 1;
     }
 
+    u8 *sdl_base_path = (u8 *)SDL_GetBasePath();
+    if(sdl_base_path == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_ERROR, 
+                     "Failed to get application base path\n");
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return 1;
+    }
+
+#ifdef __EMSCRIPTEN__
+    // IMPORTANT: if this changes `SAVE_DATA_DIR` in `emscripten_template.html` needs to be updated
+    u8 *save_data_dir = "/data_dir";
+#else
+    u8 *save_data_dir = (u8 *)SDL_GetPrefPath(ORG_NAME, APP_NAME);
+    if(save_data_dir == NULL) {
+        SDL_LogError(SDL_LOG_CATEGORY_ERROR, 
+                     "Failed to get application data path\n");
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return 1;
+    }
+#endif // __EMSCRIPTEN__
+
+
     GameSetupResult setup_result = GameSetup((void *) main_buffer, 
                                              (void *) usable_memory, 
-                                             (u8 *)SDL_GetBasePath());
+                                             sdl_base_path,
+                                             save_data_dir);
 
     screen_buffer = setup_result.game_screen_buffer;
     game_state = setup_result.game_state;

@@ -1,10 +1,7 @@
 /* *
  * TODO: 
- *      - Click/Tap to jump
- *      - Main menu
  *      - After death menu
  *      - Pause menu
- *      - Highscores menu
  *      - Sounds
  *          - Jumping
  *          - Score sound
@@ -171,6 +168,8 @@ typedef struct {
     Arena game_arena;
     Arena temp_arena;
     String executable_base_path;
+    String data_directory_path;
+    String save_file_path;
     GameDebugFlags game_debug_flags;
     b32 debug_score_increment_pressed;
     u32 current_fps;
@@ -185,6 +184,7 @@ typedef struct {
     ParticleClass jump_particles;
     ParticleClass fall_particles;
     i32 ground_draw_amount;
+    i32 highscore;
 
     Bird bird;
     i32 pipe_width;
@@ -728,6 +728,32 @@ static inline void DrawScore(u32 score, GameState *game_state,
     DrawNumber(score, x, y, game_state, game_screen_buffer);
 }
 
+
+typedef struct __attribute__((packed)) {
+    i32 highscore;
+} SaveFileData;
+
+static inline void SaveGameData(GameState *game_state)
+{
+    SaveFileData save_file_data = {
+        .highscore = Max(0, game_state->highscore)
+    };
+
+    PlatformDataToWrite data = {
+        .data = (void *) &save_file_data,
+        .size = sizeof(save_file_data)
+    };
+
+    char *save_file_path = (char *)game_state->save_file_path.data;
+    b32 ok = PlatformWriteEntireFile(data, save_file_path);
+
+    if (!ok) {
+        PlatformShowErrorWindow("Could not save game data!");
+    } else {
+        PlatformDebugPrint("saved to: %s", save_file_path);
+    }
+}
+
 /* TODO: change stupid name */
 static void PlayGame(GameScreenBuffer *game_screen_buffer,
                      GameState *game_state,
@@ -768,6 +794,11 @@ static void PlayGame(GameScreenBuffer *game_screen_buffer,
     if(game_state->bird.y + game_state->bird.height >= game_screen_buffer->playable_height ||
        BirdCollidesWithCurrentPipe(game_state)) {
         game_state->current_mode = CM_GET_READY;
+        if(game_state->current_score > game_state->highscore) {
+            game_state->highscore = game_state->current_score;
+            SaveGameData(game_state);
+        }
+
         return;
     }
     
@@ -902,11 +933,24 @@ static void GameUpdateAndRender(GameScreenBuffer *game_screen_buffer,
     if(game_state->current_mode == CM_GET_READY) {
         ResetBird(&game_state->bird, game_screen_buffer);
 
+        /* TODO: change to use a logo sprite */
+        DrawString(S("BOOMISLAV"), game_state, game_screen_buffer,
+                (i32)PercentOf(25, game_screen_buffer->width),
+                (i32)PercentOf(25, game_screen_buffer->actual_height));
+
         /* TODO: change text on mobile */
         String action_string = S("PRESS UP TO START");
 
         DrawString(action_string, game_state, game_screen_buffer,
                 game_state->bird.x, game_state->bird.y + game_state->bird.height + 20);
+
+        String highscore_title_string = S("HIGHSCORE");
+        DrawString(highscore_title_string, game_state, game_screen_buffer,
+                game_state->bird.x, game_state->bird.y + game_state->bird.height + 120);
+
+        DrawNumber(game_state->highscore, game_state->bird.x + 150, 
+                   game_state->bird.y + game_state->bird.height + 115,
+                   game_state, game_screen_buffer);
 
         if(game_state->jump_key_pressed) {
             MoveBird(game_screen_buffer, game_state);
@@ -993,31 +1037,18 @@ static BitmapAsset LoadBitmapAsset(GameState *game_state,
 {
     BitmapAsset result = {0};
 
-    String exe_path = game_state->executable_base_path;
-    String assets_folder = S(ROOT_ASSET_FOLDER"/");
+
 
     // create full asset file path
-    u8 *full_file_path = ArenaAllocArray(&game_state->temp_arena, u8, 
-                                         exe_path.length + 
-                                         assets_folder.length + 
-                                         asset_file_name.length + 1);
-    i32 curr = 0;
+    String path_array[] = {
+        game_state->executable_base_path,
+        S(ROOT_ASSET_FOLDER"/"),
+        asset_file_name
+    };
 
-    for(i32 i = 0; i < exe_path.length; i++) {
-        full_file_path[curr++] = exe_path.data[i];
-    }
+    u8 *full_file_path = StringArrayToCString(path_array, &game_state->temp_arena);
 
-    for(i32 i = 0; i < assets_folder.length; i++) {
-        full_file_path[curr++] = assets_folder.data[i];
-    }
-
-    for(i32 i = 0; i < asset_file_name.length; i++) {
-        full_file_path[curr++] = asset_file_name.data[i];
-    }
-    full_file_path[curr++] = '\0';
-
-
-    LoadedFile bitmap_file = 
+    PlatformLoadedFile bitmap_file = 
         PlatformLoadEntireFile((char *)full_file_path, &game_state->temp_arena);
 
     if(bitmap_file.size != 0) {
@@ -1106,7 +1137,7 @@ typedef struct {
 } GameSetupResult;
 
 static GameSetupResult GameSetup(void *main_window_buffer, void *usable_memory,
-                                 u8 *game_base_path)
+                                 u8 *game_base_path, u8 *data_dir_path)
 {
     GameSetupResult result = {0};
 
@@ -1133,9 +1164,50 @@ static GameSetupResult GameSetup(void *main_window_buffer, void *usable_memory,
         .length = StringLength(game_base_path)
     };
 
+    String data_directory_path = {
+        .data = data_dir_path,
+        .length = StringLength(data_dir_path)
+    };
+
+/* #if FLAPPY_DEBUG */
+/*     data_directory_path = (String) { */
+/*         .data = game_base_path, */
+/*         .length = StringLength(game_base_path) */
+/*     }; */
+/* #endif // FLAPPY_DEBUG */
+
+    String file_path_array[] = {
+        data_directory_path,
+        S("/"GAME_SAVE_FILE_NAME),
+        
+    };
+    u8 *save_file_path_cstring = StringArrayToCString(file_path_array,
+                                                      &result.game_state.asset_file_arena);
+    String save_file_path = {
+        .data = save_file_path_cstring,
+        .length = StringLength(save_file_path_cstring)
+    };
+
+    // loading save file data
+    SaveFileData *save_file_data = NULL;
+
+    PlatformLoadedFile save_file = 
+        PlatformLoadEntireFile((char *)save_file_path_cstring, &result.game_state.temp_arena);
+
+    if(save_file.size != 0) {
+        save_file_data = (SaveFileData *)save_file.memory;
+        result.game_state.highscore = save_file_data->highscore;
+        PlatformDebugPrint("Loaded save file from: %s", save_file_path_cstring);
+    }
+
+
+    result.game_state.executable_base_path = executable_base_path;
+    result.game_state.data_directory_path = data_directory_path;
+    result.game_state.save_file_path = save_file_path;
+
     result.game_state.can_score = true;
     result.game_state.current_mode = CM_GET_READY;
-    result.game_state.executable_base_path = executable_base_path;
+
     result.game_state.y_between_pipes = (i32)PercentOf(30, result.game_screen_buffer.playable_height);
     result.game_state.pipe_width = (i32)PercentOf(17, result.game_screen_buffer.width);
 
