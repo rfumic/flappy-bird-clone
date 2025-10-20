@@ -1,30 +1,30 @@
 #!/bin/bash
-printf "\n \033[1;33mRUNNING WASM BUILD SCRIPT\033[0m \n"
-set -e
+source ./build_common.sh
 
-APP_NAME="flappy_bird"
+PrintBuildStart
 
-CUSTOM_FLAGS="-D FLAPPY_DEBUG"
-WARNING_FLAGS="-Wall -Wextra -Wdouble-promotion -Wconversion -Wno-unused-function  -Wno-sign-conversion"
-C_FLAGS="-std=gnu99 -fsanitize=address $WARNING_FLAGS -g3"
-EMSCRIPTEN_FLAGS="-sUSE_SDL=3 -lidbfs.js -gsource-map --shell-file emscripten_template.html -sEXPORTED_RUNTIME_METHODS=['callMain']"
+output_path="$output_dir/wasm/index.html"
+
+emscripten_template_html="$project_root/emscripten_template.html"
+
+c_standard="-std=gnu99"
+emscripten_flags="-sUSE_SDL=3 -lidbfs.js -gsource-map \
+                  --shell-file $emscripten_template_html \
+                  --embed-file $assets_output_dir_path@assets \
+                  -sEXPORTED_RUNTIME_METHODS=['callMain']"
+
+all_flags="$emscripten_flags \
+           $common_custom_flags \
+           $common_warning_flags \
+           $common_compiler_flags \
+           $c_standard" 
 
 
-mkdir -p out/assets
-
-cp ./assets/*.bmp ./out/assets/
+PrepareOutputDirectory
+mkdir -p $output_dir/wasm
 
 set -x
-emcc src/sdl_main.c \
-         $EMSCRIPTEN_FLAGS \
-         $C_FLAGS \
-         $CUSTOM_FLAGS \
-         --embed-file ./out/assets@assets \
-         -o ./out/wasm-out-test/index.html
-
+emcc $src_entry_file $all_flags -o $output_path
 set +x
 
-printf "\033[32;1mCOMPILATION SUCCESSFUL\033[0m\n"
-
-ctags -R ./src/
-
+PrintBuildEnd
