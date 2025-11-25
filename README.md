@@ -1,3 +1,5 @@
+# Boomislav - A flappy bird clone
+Try it [here.](https://rfumic.github.io/flappy-bird-clone/)
 ## macOS
 Dependencies:
 
